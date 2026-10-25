@@ -14,6 +14,16 @@ start enabled; romantic compliments start disabled and require an explicit opt-i
 Both may be enabled, or either one alone. At least one category must stay enabled.
 The bot never changes grammatical gender mechanically.
 
+The romantic catalog uses direct declarations of deep love, admiration, longing,
+and devotion, including phrases such as “את שלמות הבריאה בעיניי” and “אתה אהבת חיי”.
+The lines are original Hebrew wording, with tonal references from
+[Hebrew partner love messages](https://www.ek-studio.co.il/post/love-quotes-for-him)
+and [Hebrew love sayings](https://smiled.co.il/משפטי-אהבה/).
+Catalog refreshes retain the existing IDs. Updating the bundled JSONL files does
+not overwrite existing SQLite text on startup; use the importer with `--update`
+for each romantic file when applying a wording refresh to an existing database.
+
+
 The entered name, gender, subscription, delivery claims, and draw history stay in
 SQLite on the Pi. Names are not inferred from Telegram profiles and are not logged.
 `/forget` removes these records and the chat's horoscope settings. The catalog is
