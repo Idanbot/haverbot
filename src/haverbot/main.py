@@ -39,7 +39,9 @@ def main() -> None:
         headers=BROWSER_HEADERS,
     )
     fetcher = HttpFetcher(client)
-    service = HoroscopeService(store, [MakoProvider(fetcher), IsraelHayomProvider(fetcher)])
+    service = HoroscopeService(
+        store, [MakoProvider(fetcher), IsraelHayomProvider(fetcher)], ingest_time=config.ingest_time
+    )
     worker: asyncio.Task[None] | None = None
 
     async def start(application: Application) -> None:
@@ -47,12 +49,13 @@ def main() -> None:
         await store.open()
         await application.bot.set_my_commands(
             [
-                BotCommand("horoscope", "תחזית למזלות הקבוצה או למזל בודד"),
+                BotCommand("horoscope", "תחזית מהמטמון למזלות שנבחרו או למזל אחד"),
+                BotCommand("start", "התחלה ועזרה — בפרטי או בקבוצה"),
                 BotCommand("sign", "תחזית מלאה למזל בודד"),
-                BotCommand("settings", "הגדרות הקבוצה למנהלים"),
+                BotCommand("settings", "הגדרות אישיות או הגדרות קבוצה למנהלים"),
                 BotCommand("unsubscribe", "ביטול הפרסום היומי"),
                 BotCommand("help", "עזרה"),
-                BotCommand("forget", "מחיקת הגדרות הקבוצה"),
+                BotCommand("forget", "מחיקת ההגדרות וזמני ההמתנה בצ׳אט"),
             ]
         )
         worker = asyncio.create_task(Scheduler(store, service, controller.scheduled).run())

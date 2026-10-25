@@ -1,12 +1,12 @@
 # חברבוט · Haverbot 🔮
 
-A friendly Telegram bot bringing Hebrew daily horoscopes to your groups.
+A friendly Telegram bot bringing Hebrew daily horoscopes to your groups and private chats.
 Pick your signs, provider, and posting time—or ask whenever you like.
 
 - 🇮🇱 Israel time, Hebrew dates, and Hebrew messages.
 - 📰 Israel Hayom and mako adapters with automatic fallback.
-- ⚙️ Admin-only settings, shared cooldowns, and buttons for full forecasts.
-- 💾 Seven days of cached forecasts in SQLite.
+- ⚙️ Personal DM settings, admin-controlled groups, and full-forecast buttons.
+- 💾 One daily ingestion, seven days of SQLite cache, and previews sized to fit.
 - 🐳 Python 3.15.1 + uv; Docker images for ARM64 and AMD64.
 
 ## Run on your Raspberry Pi 4
@@ -23,7 +23,8 @@ docker compose up -d
 ```
 
 Compose pulls the public `ghcr.io/idanbot/haverbot:latest` image automatically for
-your architecture. No registry login or on-device build is needed.
+your architecture. No registry login or on-device build is needed. Watchtower checks for bot image
+updates every five minutes and automatically replaces the bot when an update is available.
 
 Add the bot to your group as an admin, then run:
 
@@ -33,9 +34,15 @@ Add the bot to your group as an admin, then run:
 /settings enabled on
 ```
 
+You can also open a private chat with the bot and run `/start`.
 Anyone can use `/horoscope` or `/sign אריה`. Group admins control the provider,
 selected signs, on-demand access, and cooldowns through `/settings`.
-Scheduled posts start disabled; missed posting times are skipped.
+Scheduled posts start disabled; missed posting times are skipped. In DMs, each
+user controls their own settings. Use `/settings words auto` for automatic previews.
+
+Both sources are ingested once per Israel-local day at **06:00**, configurable
+with `HAVERBOT_INGEST_TIME` in `.env`. Starting after that time runs an unattempted
+day immediately. Commands read the cache; failed daily ingestion waits until the next day.
 
 Your settings live in a Docker volume and survive updates. Keep `.env` private;
 Git and Docker exclude it, credentials, databases, and local backups.

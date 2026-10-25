@@ -29,23 +29,23 @@ HoroscopeService ◄──────── Scheduler
   Hebrew labels, and the Israel timezone.
 * `storage.py`: asynchronous persistence. Forecast keys are immutable; conditional
   SQLite UPSERTs atomically claim cooldowns even across connections. Delivery
-  primary keys prevent repeated daily attempts. `user_version=1` identifies the
-  initial schema; future changes should introduce explicit migrations.
+  primary keys prevent repeated daily attempts. `user_version=3` includes durable provider/day ingestion claims and migration
+  of the previous default word cap to automatic sizing.
 * `providers/`: public HTML/JSON extraction. Each provider returns only dated daily
   forecasts it can verify. HTTP timeouts, response bounds, pacing, and safe failures
   live in the shared fetcher. Parsers accept HTML strings, enabling fixture tests.
-* `service.py`: shared fetch tasks, partial cache completion, retry state,
+* `service.py`: one daily ingestion task per provider, durable attempt claims,
   provider fallback, retention, and the two on-demand cooldown buckets. Time is
-  injected for deterministic tests. Group settings and cooldowns survive restarts;
-  fetch retry state is intentionally in memory and restarts with a fresh attempt.
+  injected for deterministic tests. Chat settings, cooldowns, and ingestion claims survive restarts. Commands only
+  read cached forecasts; failures wait for the next local day.
 * `formatting.py`: Hebrew date conversion, safe HTML, preview word/character
   budgets, exact expansion identifiers, and long single-sign splitting.
 * `scheduler.py`: current-minute delivery and durable per-group/day attempt claims.
   The schedule is an Israel wall-clock time; timestamps are used for elapsed-time
   cooldowns, so the autumn repeated hour cannot extend or reset a cooldown.
 * `telegram_app.py`: transport and permission checks. Commands are processed
-  sequentially, while fetch tasks run concurrently in the event loop. Every admin
-  mutation, including callbacks from old panels, checks live Telegram membership.
+  sequentially, while fetch tasks run concurrently in the event loop. In groups, each settings mutation checks live Telegram administrator membership.
+  Private chat users control their own configuration without a membership lookup.
 * `main.py`: dependency composition, lifecycle, commands, and polling. No service
   reads the token; it is confined to configuration and Telegram construction.
 * `check_providers.py`: optional live source diagnostics; never loads bot credentials.
@@ -58,7 +58,7 @@ HoroscopeService ◄──────── Scheduler
    which may differ from the article publication timestamp. Never substitute the
    fetch date for missing source date metadata.
 4. Return partial successes. Raise `ProviderError` for transport/access failures;
-   supply `retry_after` for throttling. A complete forecast never needs refetching
+   supply `retry_after` for throttling metadata. A complete forecast never needs refetching
    for the same day/sign key.
 5. Register its ID/name in `PROVIDER_NAMES`, wire the adapter in `main.py` and the
    diagnostic, and add dated synthetic HTML fixtures plus mocked HTTP tests.
@@ -79,8 +79,7 @@ conditionals for unrelated functionality.
 ## Consistency choices
 
 * All signs in a bulletin come from one provider/day. A group's chosen subset can
-  be served as soon as that subset is available; the remaining signs still fill in
-  the background.
+  be served when that subset is present in the daily ingestion result.
 * A single-sign command resolves the provider according to current settings. An
   expansion callback resolves an exact immutable provider/day/sign key instead.
 * Missing data does not start a cooldown. A successful reservation prevents

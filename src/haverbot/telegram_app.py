@@ -18,22 +18,25 @@ from haverbot.storage import Store
 
 logger = logging.getLogger(__name__)
 Context = ContextTypes.DEFAULT_TYPE
-HELP = """שלום! אני חברבוט 🔮
-/horoscope — הורוסקופ למזלות שנבחרו בקבוצה
-/horoscope leo — תחזית מלאה למזל אחד (אפשר גם: אריה)
-/sign אריה — בקשה למזל אחד
-/settings — הגדרות למנהלי הקבוצה
-/unsubscribe — ביטול הפרסום היומי (למנהלים)
-/forget — מחיקת הגדרות הקבוצה והיסטוריית ההמתנה (למנהלים)
+HELP = """שלום! אני חברבוט 🔮 — הורוסקופ בעברית, בפרטי ובקבוצות.
+/start או /help — עזרה
+/horoscope — תחזית למזלות שבחרתם
+/horoscope leo או /sign אריה — תחזית מלאה למזל אחד
+/settings — בחירת מקור, מזלות, שעה, אורך וזמני המתנה
+/unsubscribe — ביטול הפרסום היומי
+/forget — מחיקת ההגדרות וזמני ההמתנה בצ׳אט
 
-הוסיפו אותי לקבוצה והעניקו לי הרשאת מנהל כדי שאוכל לאמת מי רשאי לשנות הגדרות.
-הפרסום היומי כבוי עד שמנהל מפעיל אותו. השעות תמיד לפי שעון ישראל.
+בפרטי אתם שולטים בהגדרות שלכם; בקבוצות רק מנהלים משנים הגדרות.
+הוסיפו את הבוט כמנהל בקבוצה כדי לאפשר בדיקת הרשאות.
+הפרסום היומי מתחיל כבוי. השעות לפי שעון ישראל.
+המקורות נאספים פעם ביום. כל הבקשות והכפתורים נטענים מהמטמון.
+אורך התחזית מותאם לתקציב התווים; כפתורים מציגים טקסט מלא כשצריך.
 """
 SETTINGS_HELP = """שינוי ערכים באמצעות פקודות:
 /settings time 08:00
 /settings cooldown 15
 /settings single_cooldown 1
-/settings words 40
+/settings words auto
 /settings signs all
 /settings signs אריה,טלה
 /settings provider mako
@@ -41,7 +44,7 @@ SETTINGS_HELP = """שינוי ערכים באמצעות פקודות:
 /settings on_demand off
 /settings fallback on
 
-זמני ההמתנה בדקות: 1–1440. מילים למזל: 5–100.
+זמני ההמתנה בדקות: 1–1440. מילים למזל: auto להתאמה לתקציב התווים, או 5–100 להגבלה ידנית.
 כפתורי התחזית המלאה משתמשים בהמתנה המשותפת לכל המזלות הבודדים.
 """
 
@@ -74,17 +77,21 @@ class TelegramController:
         if update.effective_message:
             await update.effective_message.reply_text(HELP)
 
-    async def _group(self, update: Update) -> int | None:
+    async def _chat(self, update: Update) -> int | None:
         chat = update.effective_chat
-        if chat and chat.type in {ChatType.GROUP, ChatType.SUPERGROUP}:
+        if chat and chat.type in {ChatType.GROUP, ChatType.SUPERGROUP, ChatType.PRIVATE}:
             return chat.id
         if update.effective_message:
-            await update.effective_message.reply_text("הפקודה זמינה בקבוצות בלבד.\n" + HELP)
+            await update.effective_message.reply_text(
+                "הפקודה זמינה בקבוצה או בשיחה פרטית.\n" + HELP
+            )
         return None
 
     async def _admin(self, update: Update) -> bool:
         if update.effective_chat is None or update.effective_user is None:
             return False
+        if update.effective_chat.type == ChatType.PRIVATE:
+            return True
         try:
             member = await self.bot.get_chat_member(
                 update.effective_chat.id, update.effective_user.id
@@ -99,7 +106,7 @@ class TelegramController:
         return allowed
 
     async def horoscope(self, update: Update, context: Context) -> None:
-        chat_id = await self._group(update)
+        chat_id = await self._chat(update)
         if chat_id is None:
             return
         try:
@@ -164,16 +171,21 @@ class TelegramController:
             return "✅" if value else "❌"
 
         text = (
-            "⚙️ <b>הגדרות הורוסקופ לקבוצה</b>\n"
+            "⚙️ <b>הגדרות הורוסקופ לצ׳אט</b>\n"
             f"פרסום יומי: {flag(settings.enabled)}\n"
             f"שעה בישראל: <b>{settings.post_time}</b>\n"
             f"מקור מועדף: <b>{PROVIDER_NAMES[settings.provider]}</b>\n"
             f"גיבוי אוטומטי: {flag(settings.fallback)}\n"
             f"לפי דרישה: {flag(settings.on_demand)}\n"
-            f"המתנה לבקשת תחזית קבוצתית: {settings.bulletin_minutes} דקות\n"
+            f"המתנה לבקשת תחזית למזלות הנבחרים: {settings.bulletin_minutes} דקות\n"
             f"המתנה משותפת למזלות בודדים: {settings.single_minutes} דקות\n"
-            f"עד {settings.max_words} מילים לכל מזל\n"
-            f"מזלות: {', '.join(s.hebrew for s in settings.signs)}\n\n" + SETTINGS_HELP
+            + (
+                "אורך התחזית: אוטומטי לפי תקציב התווים\n"
+                if not settings.max_words
+                else f"עד {settings.max_words} מילים לכל מזל\n"
+            )
+            + f"מזלות: {', '.join(s.hebrew for s in settings.signs)}\n\n"
+            + SETTINGS_HELP
         )
         rows = [
             [
@@ -219,6 +231,8 @@ class TelegramController:
             return replace(settings, post_time=validate_time(value))
         if key == "provider":
             return replace(settings, provider=value)
+        if key == "words" and value == "auto":
+            return replace(settings, max_words=0)
         if key in {"cooldown", "single_cooldown", "words"}:
             try:
                 number = int(value)
@@ -242,12 +256,10 @@ class TelegramController:
         async with lock:
             settings = self.apply_setting(await self.store.settings(chat_id), key, value)
             await self.store.save_settings(settings)
-        for provider in self.service.provider_order(settings):
-            self.service.request_refresh(provider, self.service.clock().date())
         return settings
 
     async def settings(self, update: Update, context: Context) -> None:
-        chat_id = await self._group(update)
+        chat_id = await self._chat(update)
         if chat_id is None or not await self._admin(update):
             return
         args = context.args or []
@@ -267,7 +279,7 @@ class TelegramController:
             await self.send(chat_id, [Message(str(exc))])
 
     async def unsubscribe(self, update: Update, context: Context) -> None:
-        chat_id = await self._group(update)
+        chat_id = await self._chat(update)
         if chat_id is not None and await self._admin(update):
             await self._change(chat_id, "enabled", "off")
             await self.send(
@@ -275,11 +287,11 @@ class TelegramController:
             )
 
     async def forget(self, update: Update, context: Context) -> None:
-        chat_id = await self._group(update)
+        chat_id = await self._chat(update)
         if chat_id is not None and await self._admin(update):
             await self.store.forget_group(chat_id)
             await self.send(
-                chat_id, [Message("הגדרות הקבוצה וזמני ההמתנה נמחקו. הפרסום היומי כבוי.")]
+                chat_id, [Message("ההגדרות וזמני ההמתנה בצ׳אט נמחקו. הפרסום היומי כבוי.")]
             )
 
     async def callback(self, update: Update, context: Context) -> None:
@@ -287,7 +299,7 @@ class TelegramController:
         if query is None:
             return
         await query.answer()
-        chat_id = await self._group(update)
+        chat_id = await self._chat(update)
         if chat_id is None:
             return
         data = query.data

@@ -7,6 +7,10 @@ services:
     environment:
       HAVERBOT_DATABASE: /data/haverbot.sqlite3
       HAVERBOT_LOG_LEVEL: INFO
+      HAVERBOT_INGEST_TIME: ${HAVERBOT_INGEST_TIME:-06:00}
+    labels:
+      com.centurylinklabs.watchtower.enable: "true"
+      com.centurylinklabs.watchtower.scope: haverbot
     volumes:
       - haverbot-data:/data
     read_only: true
@@ -15,6 +19,24 @@ services:
     cap_drop:
       - ALL
     stop_grace_period: 30s
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"
+
+  watchtower:
+    image: containrrr/watchtower:1.7.1
+    restart: unless-stopped
+    environment:
+      DOCKER_API_VERSION: ${WATCHTOWER_DOCKER_API_VERSION:-1.44}
+      WATCHTOWER_POLL_INTERVAL: "300"
+      WATCHTOWER_LABEL_ENABLE: "true"
+      WATCHTOWER_SCOPE: haverbot
+      WATCHTOWER_CLEANUP: "true"
+      WATCHTOWER_TIMEOUT: 30s
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
     logging:
       driver: json-file
       options:

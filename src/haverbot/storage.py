@@ -49,9 +49,16 @@ class Store:
                 chat_id INTEGER NOT NULL, day TEXT NOT NULL,
                 PRIMARY KEY(chat_id, day)
             );
+            CREATE TABLE IF NOT EXISTS ingestions (
+                provider TEXT NOT NULL, day TEXT NOT NULL,
+                PRIMARY KEY(provider, day)
+            );
             UPDATE groups SET settings=json_set(settings, '$.provider', 'mako')
             WHERE json_extract(settings, '$.provider')='walla';
-            PRAGMA user_version=2;
+            UPDATE groups SET settings=json_set(settings, '$.max_words', 0)
+            WHERE json_extract(settings, '$.max_words')=40
+                AND (SELECT user_version FROM pragma_user_version)<3;
+            PRAGMA user_version=3;
         """)
 
     async def close(self) -> None:
@@ -141,12 +148,20 @@ class Store:
         ) as cursor:
             return cursor.rowcount == 1
 
+    async def claim_ingestion(self, provider: str, day: date) -> bool:
+        """Reserve the daily attempt before network I/O, including across restarts."""
+        async with self.db.execute(
+            "INSERT OR IGNORE INTO ingestions VALUES (?,?)", (provider, day.isoformat())
+        ) as cursor:
+            return cursor.rowcount == 1
+
     async def prune(self, today: date) -> None:
         cutoff = (today - timedelta(days=6)).isoformat()
         await self.db.execute(
             "DELETE FROM forecasts WHERE day<? OR day>?", (cutoff, today.isoformat())
         )
         await self.db.execute("DELETE FROM deliveries WHERE day<?", (cutoff,))
+        await self.db.execute("DELETE FROM ingestions WHERE day<?", (cutoff,))
         # Cooldowns cannot remain active for longer than 24h.
         from haverbot.domain import ISRAEL
 

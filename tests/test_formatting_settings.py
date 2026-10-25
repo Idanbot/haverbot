@@ -73,6 +73,7 @@ def test_mixed_provider_or_day_rejected(forecasts):
         ("cooldown", "1440", "bulletin_minutes", 1440),
         ("single_cooldown", "1", "single_minutes", 1),
         ("words", "60", "max_words", 60),
+        ("words", "auto", "max_words", 0),
         ("signs", "אריה,טלה", "signs", (Sign.ARIES, Sign.LEO)),
     ],
 )
@@ -110,3 +111,21 @@ def test_cannot_deselect_last_sign():
 @pytest.mark.parametrize("value", ["00:00", "02:30", "23:59"])
 def test_valid_local_times(value):
     assert validate_time(value) == value
+
+
+def test_auto_preview_uses_space_for_more_than_40_words(forecasts):
+    text = " ".join(["שלום"] * 100)
+    message = bulletin([replace(forecasts[0], text=text)], GroupSettings(-1))
+    assert text in message.text
+    assert not message.buttons
+    assert units(message.text) <= 4000
+
+
+def test_short_forecasts_donate_budget_to_longer_signs(forecasts):
+    items = [replace(f, text="שלום עולם") for f in forecasts]
+    items[0] = replace(items[0], text=" ".join(["ארוך"] * 1000))
+    message = bulletin(items, GroupSettings(-1))
+    first_sign = message.text.split("\n\n")[1]
+    assert first_sign.count("ארוך") > 400
+    assert len(message.buttons) == 1
+    assert units(message.text) <= 4000

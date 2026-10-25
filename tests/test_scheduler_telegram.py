@@ -174,3 +174,42 @@ async def test_scheduled_failed_attempt_is_not_retried(store, now):
     await scheduler.tick()
     await scheduler.tick()
     send.assert_awaited_once()
+
+
+async def test_private_chat_owns_settings_callbacks_and_cached_horoscopes(store, now, forecasts):
+    bot: Any = SimpleNamespace(send_message=AsyncMock(), get_chat_member=AsyncMock())
+    await store.put_forecasts(forecasts)
+    service = HoroscopeService(store, [], lambda: now)
+    controller = TelegramController(store, service, bot)
+    event = update(chat_id=17)
+    event.effective_chat.type = "private"
+    await controller.settings(event, context(args=["signs", "leo"]))
+    assert (await store.settings(17)).signs == (Sign.LEO,)
+    await controller.horoscope(event, context(args=[]))
+    assert "mako" in bot.send_message.call_args.kwargs["text"]
+    assert not service._tasks
+    event.callback_query = SimpleNamespace(
+        answer=AsyncMock(), edit_message_text=AsyncMock(), data="cfg:enabled:toggle"
+    )
+    await controller.callback(event, context(args=[]))
+    assert (await store.settings(17)).enabled
+    await controller.unsubscribe(event, context(args=[]))
+    assert not (await store.settings(17)).enabled
+    await controller.forget(event, context(args=[]))
+    assert not await store.groups()
+    bot.get_chat_member.assert_not_awaited()
+    assert not service._tasks
+
+
+async def test_private_chat_can_restore_disabled_on_demand(store, now):
+    bot: Any = SimpleNamespace(send_message=AsyncMock(), get_chat_member=AsyncMock())
+    service = HoroscopeService(store, [], lambda: now)
+    controller = TelegramController(store, service, bot)
+    event = update(chat_id=17)
+    event.effective_chat.type = "private"
+    await store.save_settings(GroupSettings(17, on_demand=False))
+    await controller.settings(event, context(args=["on_demand", "on"]))
+    assert (await store.settings(17)).on_demand
+    await controller.help(event, context(args=[]))
+    assert "בפרטי" in event.effective_message.reply_text.call_args.args[0]
+    bot.get_chat_member.assert_not_awaited()

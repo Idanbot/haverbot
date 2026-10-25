@@ -1,6 +1,6 @@
 # Haverbot · חברבוט 🔮
 
-A modular Telegram group bot for Hebrew daily horoscopes from Israeli publishers.
+A modular Telegram bot for groups and private chats for Hebrew daily horoscopes from Israeli publishers.
 Python **3.15.1**, **uv**, SQLite, and Docker. Designed for a Raspberry Pi 4 with
 **64-bit Raspberry Pi OS**; CI also builds and smoke-tests an ARM64 image.
 
@@ -43,22 +43,23 @@ In the group, a group administrator can run:
 ```
 
 The settings panel has Hebrew buttons for providers, signs, subscription, fallback,
-and on-demand access. Other members cannot modify settings, including through old
-panels. Every action rechecks Telegram administrator status.
+and on-demand access. Other group members cannot modify settings, including through old panels.
+Group changes recheck Telegram administrator status. In a private chat, the user
+controls their own settings and can enable their own daily subscription.
 
 ## Commands and settings
 
 | Command | Behavior |
 | --- | --- |
 | `/help` or `/start` | Hebrew help, including in private chat |
-| `/horoscope` | Bulletin for this group's selected signs |
+| `/horoscope` | Bulletin for this chat's selected signs |
 | `/horoscope אריה` or `/horoscope leo` | Full forecast for one sign |
 | `/sign אריה` | Alias for a single-sign request |
-| `/settings` | Administrator settings panel |
-| `/unsubscribe` | Administrator disables scheduled posts |
-| `/forget` | Administrator deletes this group's settings and cooldowns |
+| `/settings` | Personal settings in DMs; administrator settings in groups |
+| `/unsubscribe` | Disable scheduled posts; group admins only in groups |
+| `/forget` | Delete this chat's settings and cooldowns; group admins only in groups |
 
-Configuration commands, available to group administrators:
+Configuration commands are available to each DM user and to group administrators:
 
 | Example | Default / constraints |
 | --- | --- |
@@ -71,18 +72,20 @@ Configuration commands, available to group administrators:
 | `/settings on_demand off` | On by default; controls commands and expansion buttons |
 | `/settings cooldown 15` | Bulletin cooldown; 1–1440 minutes |
 | `/settings single_cooldown 1` | Single-sign cooldown; 1–1440 minutes |
-| `/settings words 40` | Maximum preview words per sign; 5–100 |
+| `/settings words auto` | Default: allocate the available character budget across signs |
+| `/settings words 60` | Optional word cap per sign; 5–100, within the character budget |
 
-Both cooldowns are shared across the **whole group**, but independent of each
+Both cooldowns are shared across the **whole chat**, but independent of each
 other. Asking for Leo starts the single-sign cooldown for Aries and every other
 single sign too. Expansion buttons use that same cooldown. Scheduled posts bypass
 both cooldowns. Unavailable forecasts and failed sends before any part is sent do
-not consume a cooldown. Group selection filters bulletins; explicit single-sign
+not consume a cooldown. Chat selection filters bulletins; explicit single-sign
 commands may request any sign.
 
 Bulletins display the actual provider, Gregorian and Hebrew forecast dates,
 Hebrew sign names and zodiac symbols, previews, and a source link. A preview stops
-at the configured word limit, or earlier to fit Telegram's character budget.
+at Telegram's character budget. Short signs donate unused space to longer signs.
+An optional manual word cap can further shorten previews.
 Truncated signs get a `התחזית המלאה` button. Full single-sign forecasts can span
 several messages if necessary. HTML is escaped; link previews are disabled.
 
@@ -120,33 +123,41 @@ The diagnostic exits successfully if at least one requested provider supplies al
 12 signs. It exits nonzero if none do. Live diagnostics are intentionally separate
 from CI; tests use local synthetic fixtures and mocked HTTP.
 
-## Cache, retries, and scheduling
+## Cache and scheduling
 
-* SQLite stores each **Israel-local forecast day + provider + sign** separately.
-  Full text is immutable once cached for that key, keeping expansion buttons
-  consistent with the original bulletin.
-* Retention is **today plus six previous calendar days**. Buttons include the
-  original provider/day/sign; expired buttons explain in Hebrew that the cache no
-  longer contains the forecast. They never switch to today's text or another source.
-* After a group configures settings or requests content, background maintenance
-  builds all signs for its providers. Complete days are reused without fetching
-  again. Partial successes remain cached and only missing signs are requested.
-* Concurrent requests share fetching work. Per-host HTTP requests are separated
-  by at least two seconds, have timeouts and size limits, and use bounded connection
-  pools. Incomplete results retry after 1, 2, 4, 8, 16, then 30 minutes, capped at
-  30 minutes. HTTP 429 honors `Retry-After`; access-denied/challenge responses wait
-  at least one hour. No CAPTCHA solving or browser automation is included.
-* A demand for unavailable content gets a Hebrew availability message immediately
-  while fetching continues in the background. Request it again later; there is no
-  unsolicited delayed delivery.
-* Scheduled delivery is considered only during the configured minute, checked
-  every 15 seconds. Startup skips the current minute, missed times aren't replayed,
-  and delivery work expires at the end of its minute. If content is unavailable,
-  that scheduled attempt sends the Hebrew availability message instead.
-* `Asia/Jerusalem` handles DST. A missing spring hour is skipped; a repeated autumn
-  hour sends at most once per group/day. A durable claim is written **before** the
-  attempt. A crash or delivery failure can therefore skip a post; avoiding duplicate
-  or late scheduled messages takes precedence over retrying delivery.
+* Each enabled provider is ingested once per Israel-local calendar day, independently
+  of how many chats use the bot. Set `HAVERBOT_INGEST_TIME=06:00` in `.env` to choose
+  the daily ingestion time. An unattempted day runs on startup after that time.
+* A SQLite claim is saved before network access. Partial results remain cached;
+  failures and interrupted attempts wait until the next day. Container updates,
+  restarts, chat commands, and settings changes do not repeat a daily ingestion.
+  Provider adapters may need multiple HTTP requests to collect their signs during
+  the single ingestion job. Per-host requests remain spaced by at least two seconds.
+* Commands, expansion buttons, and scheduled posts read only SQLite. Missing
+  forecasts produce a Hebrew availability message. There is no command-triggered
+  scraping or delayed reply. Choose a posting time after the ingestion time.
+* Cache keys are Israel-local day + provider + sign. Full text is immutable for
+  that key. Retention is today plus six previous days. Full-forecast buttons keep
+  the original provider/date/sign and explain when their cached forecast expires.
+* Scheduled delivery is checked every 15 seconds, during its configured minute.
+  Startup skips the current minute; missed posts are not replayed. Work expires at
+  the end of its minute. Scheduled posts bypass on-demand cooldowns.
+* `Asia/Jerusalem` handles DST: a missing spring hour is skipped and a repeated
+  autumn hour sends at most once per chat/day. Delivery claims are durable.
+
+## Automatic container updates
+
+Compose includes Watchtower, which checks GHCR every 300 seconds and updates only
+Haverbot containers carrying this stack's enable/scope labels. The SQLite volume
+survives replacement. Watchtower uses the host Docker socket to replace containers;
+the bot container does not have access to that socket. `DOCKER_API_VERSION` defaults
+to 1.44; override `WATCHTOWER_DOCKER_API_VERSION` in `.env` if your Docker host needs
+another supported API version. The Watchtower image supports ARM64 and AMD64.
+
+To apply Compose or `.env` changes, run `git pull --ff-only` and
+`docker compose up -d`. Watchtower updates the bot image; Git/Compose configuration
+changes still need that manual step. Pin `HAVERBOT_IMAGE` to an immutable SHA tag
+if you want to stay on a specific bot release.
 
 ## Development and checks
 
@@ -172,7 +183,7 @@ check imports, non-root execution, and volume persistence. After checks pass, pu
 publish. No Telegram token is needed in CI.
 
 The tests exercise provider date/body extraction, blocked responses, cache
-retention, partial fetches and retries, fallback, administrator checks, separate
+retention, daily ingestion claims and cache-only requests, fallback, administrator checks, separate
 cooldowns, concurrent SQLite connections, message escaping/budgets, old expansion
 buttons, startup/shutdown, missed deliveries, and both DST transitions.
 
@@ -184,9 +195,9 @@ See [architecture](architecture.md) to add a provider or another bot feature.
 Docker build contexts. The Dockerfile copies only dependency manifests and source
 code. CI never needs the real token.
 
-SQLite stores group chat IDs because subscriptions require a destination. They
+SQLite stores group or private chat IDs because subscriptions require a destination. They
 stay in the runtime volume; usernames, member profiles, birthdays, and message
-history are not stored. `/forget` deletes group settings, cooldowns, and delivery
+history are not stored. `/forget` deletes chat settings, cooldowns, and delivery
 claims; removal of the bot from a group also clears those records. The forecast
 cache is shared public content, so forgetting a group does not delete it.
 Application logs contain provider/error types and aggregate counts, rather than

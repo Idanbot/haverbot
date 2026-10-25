@@ -1,4 +1,4 @@
-"""Application services: cache completion, provider fallback and request authorization."""
+"""Daily ingestion, cache-only forecast selection and request authorization."""
 
 import asyncio
 import logging
@@ -6,23 +6,17 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 
-from haverbot.domain import PROVIDER_NAMES, Forecast, GroupSettings, Sign, israel_now
+from haverbot.domain import PROVIDER_NAMES, Forecast, GroupSettings, Sign, israel_now, validate_time
 from haverbot.providers.base import Provider, ProviderError
 from haverbot.storage import Bucket, Store
 
 logger = logging.getLogger(__name__)
 UNAVAILABLE = (
-    "התחזית להיום עדיין אינה זמינה במקור שנבחר או במקורות הגיבוי. "
-    "אנחנו מנסים שוב ברקע; אפשר לבקש שוב בעוד כמה דקות."
+    "התחזית להיום אינה זמינה כעת במטמון. המקורות נאספים פעם ביום; "
+    "אפשר לנסות מקור אחר בהגדרות או לבקש שוב אחרי האיסוף היומי."
 )
 EXPIRED = "התחזית המבוקשת כבר אינה שמורה במטמון (נשמרים עד 7 ימים)."
-DISABLED = "בקשות הורוסקופ לפי דרישה כבויות בקבוצה זו. אפשר לפנות למנהלי הקבוצה."
-
-
-@dataclass(slots=True)
-class RetryState:
-    attempts: int = 0
-    due: datetime | None = None
+DISABLED = "בקשות לפי דרישה כבויות בצ׳אט. אפשר להפעיל דרך /settings (בקבוצה: מנהלים בלבד)."
 
 
 @dataclass(frozen=True, slots=True)
@@ -36,12 +30,17 @@ class RequestResult:
 
 class HoroscopeService:
     def __init__(
-        self, store: Store, providers: list[Provider], clock: Callable[[], datetime] = israel_now
+        self,
+        store: Store,
+        providers: list[Provider],
+        clock: Callable[[], datetime] = israel_now,
+        *,
+        ingest_time: str = "06:00",
     ) -> None:
         self.store = store
         self.providers = {p.id: p for p in providers}
         self.clock = clock
-        self._states: dict[tuple[str, date], RetryState] = {}
+        self.ingest_time = validate_time(ingest_time)
         self._tasks: dict[tuple[str, date], asyncio.Task[None]] = {}
 
     def request_refresh(self, provider: str, day: date) -> None:
@@ -52,24 +51,20 @@ class HoroscopeService:
         ):
             return
         key = provider, day
-        state = self._states.setdefault(key, RetryState())
-        if state.due is not None and state.due > self.clock():
-            return
         existing = self._tasks.get(key)
-        if existing is not None and not existing.done():
+        if existing is not None:
             return
         self._tasks[key] = asyncio.create_task(
             self._refresh(provider, day), name=f"fetch-{provider}"
         )
 
     async def _refresh(self, provider: str, day: date) -> None:
-        state = self._states[provider, day]
-        retry_after = 0.0
+        if not await self.store.claim_ingestion(provider, day):
+            return
         try:
             cached = await self.store.forecasts(provider, day)
             missing = set(Sign) - cached.keys()
             if not missing:
-                state.due = self.clock() + timedelta(days=1)
                 return
             items = await self.providers[provider].fetch(day, missing)
             valid = [
@@ -80,31 +75,22 @@ class HoroscopeService:
                 await self.store.put_forecasts(valid)
             logger.info("provider=%s cached=%d received=%d", provider, len(cached), len(valid))
         except ProviderError as exc:
-            retry_after = exc.retry_after
             logger.warning("provider=%s unavailable=%s", provider, str(exc))
         except Exception as exc:
             # Telegram request URLs contain the token: never log exception messages/tracebacks.
             logger.error("provider=%s unexpected=%s", provider, type(exc).__name__)
-        state.attempts += 1
-        delay = max(retry_after, min(1800, 60 * 2 ** min(state.attempts - 1, 5)))
-        state.due = self.clock() + timedelta(seconds=delay)
 
     async def maintain(self) -> None:
         today = self.clock().date()
         await self.store.prune(today)
-        self._states = {key: state for key, state in self._states.items() if key[1] == today}
         for key, task in list(self._tasks.items()):
             if key[1] != today:
                 task.cancel()
                 await asyncio.gather(task, return_exceptions=True)
                 del self._tasks[key]
-        groups = await self.store.groups()
-        needed: set[str] = set()
-        for settings in groups:
-            if settings.enabled or settings.on_demand:
-                needed.update(self.provider_order(settings))
-        for provider in needed:
-            self.request_refresh(provider, today)
+        if self.clock().strftime("%H:%M") >= self.ingest_time:
+            for provider in self.providers:
+                self.request_refresh(provider, today)
 
     def provider_order(self, settings: GroupSettings) -> list[str]:
         return [settings.provider] + (
@@ -118,7 +104,6 @@ class HoroscopeService:
             cached = await self.store.forecasts(provider, day)
             if all(sign in cached for sign in signs):
                 return tuple(cached[s] for s in signs)
-            self.request_refresh(provider, day)
         return ()
 
     async def request(

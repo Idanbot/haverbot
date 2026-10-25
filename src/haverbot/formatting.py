@@ -45,16 +45,28 @@ class Message:
 
 
 def snippet(text: str, words: int, chars: int) -> tuple[str, bool]:
-    preview = " ".join(text.split()[:words])
-    if units(escape(preview)) > chars:
-        # Drop complete words; handle even a single pathological word safely.
-        while " " in preview and units(escape(preview)) > chars:
-            preview = preview.rsplit(" ", 1)[0]
-        if units(escape(preview)) > chars:
-            while preview and units(escape(preview)) > chars:
-                preview = preview[:-1]
-    truncated = preview != text
-    return preview + ("…" if truncated else ""), truncated
+    tokens = text.split()
+    selected = tokens[:words] if words else tokens
+    target = " ".join(selected)
+    if len(selected) == len(tokens) and units(escape(target)) <= chars:
+        return target, False
+    available = max(0, chars - units("…"))
+    pieces: list[str] = []
+    used = 0
+    for word in selected:
+        cost = units(escape(word)) + bool(pieces)
+        if used + cost > available:
+            if not pieces:
+                clipped = ""
+                for char in word:
+                    if units(escape(clipped + char)) > available:
+                        break
+                    clipped += char
+                pieces.append(clipped)
+            break
+        pieces.append(word)
+        used += cost
+    return " ".join(pieces) + "…", True
 
 
 def bulletin(forecasts: list[Forecast], settings: GroupSettings) -> Message:
@@ -64,13 +76,35 @@ def bulletin(forecasts: list[Forecast], settings: GroupSettings) -> Message:
     if any(f.provider != provider or f.day != day for f in forecasts):
         raise ValueError("A bulletin must have one provider and date")
     title = header(provider, day)
-    # Include HTML syntax in the budget too: conservative even before entities parsing.
-    budget = (MAX_UNITS - units(title) - 200) // len(forecasts) - 100
+    footer = f'🔗 <a href="{safe_url(forecasts[0].source_url)}">למקור התחזית</a>'
+    prefixes = [f"• {f.sign.emoji} <b>{f.sign.hebrew}:</b> " for f in forecasts]
+    remaining = MAX_UNITS - units(title + footer + "".join(prefixes)) - 2 * (len(forecasts) + 1)
+    if remaining < len(forecasts):
+        raise ValueError("Provider metadata cannot fit a bulletin")
+    # Share space fairly, then return unused space from short signs to longer ones.
+    desired = []
+    for f in forecasts:
+        tokens = f.text.split()
+        selected = tokens[: settings.max_words] if settings.max_words else tokens
+        desired.append(units(escape(" ".join(selected))) + (len(selected) < len(tokens)))
+    budgets = [0] * len(forecasts)
+    pending = set(range(len(forecasts)))
+    while pending:
+        share = remaining // len(pending)
+        short = {i for i in pending if desired[i] <= share}
+        if not short:
+            for offset, i in enumerate(sorted(pending)):
+                budgets[i] = share + (offset < remaining % len(pending))
+            break
+        for i in short:
+            budgets[i] = desired[i]
+            remaining -= desired[i]
+        pending -= short
     lines: list[str] = [title]
     buttons: list[Button] = []
-    for f in forecasts:
-        text, truncated = snippet(f.text, settings.max_words, max(30, budget))
-        lines.append(f"• {f.sign.emoji} <b>{f.sign.hebrew}:</b> {escape(text)}")
+    for f, prefix, budget in zip(forecasts, prefixes, budgets, strict=True):
+        text, truncated = snippet(f.text, settings.max_words, budget)
+        lines.append(prefix + escape(text))
         if truncated:
             buttons.append(
                 Button(
@@ -78,16 +112,8 @@ def bulletin(forecasts: list[Forecast], settings: GroupSettings) -> Message:
                     f"full:{provider}:{day.isoformat()}:{f.sign.value}",
                 )
             )
-    lines.append(f'🔗 <a href="{safe_url(forecasts[0].source_url)}">למקור התחזית</a>')
-    result = "\n\n".join(lines)
-    # Escaping hostile HTML can expand a preview. Reduce the budget until it fits.
-    if units(result) > MAX_UNITS:
-        if settings.max_words > 5:
-            from dataclasses import replace
-
-            return bulletin(forecasts, replace(settings, max_words=5))
-        raise ValueError("Provider content cannot fit a bulletin")
-    return Message(result, tuple(buttons))
+    lines.append(footer)
+    return Message("\n\n".join(lines), tuple(buttons))
 
 
 def full_sign(forecast: Forecast) -> list[Message]:

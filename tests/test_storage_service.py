@@ -157,28 +157,34 @@ async def test_cooldown_survives_restart_and_can_be_released(tmp_path, now):
     await store.close()
 
 
-async def test_partial_cache_retry_fetches_only_missing_and_coalesces(store, forecasts, now):
+async def test_daily_ingestion_coalesces_and_never_retries_partial_days(store, forecasts, now):
     provider = FakeProvider(forecasts[:2])
     provider.gate = asyncio.Event()
     service = HoroscopeService(store, [provider], lambda: now)
-    settings = GroupSettings(-1, provider="mako", fallback=False)
+    settings = GroupSettings(-1, fallback=False)
     for _ in range(5):
         assert (await service.request(settings)).error == UNAVAILABLE
+    assert not provider.calls
+    for _ in range(5):
+        await service.maintain()
     await asyncio.sleep(0)
+    await asyncio.sleep(0.05)
     assert len(provider.calls) == 1
     provider.gate.set()
     await drain(service)
     assert len(await store.forecasts("mako", now.date())) == 2
     provider.items = forecasts
-    service.request_refresh("mako", now.date())
+    now += timedelta(hours=1)
+    await service.maintain()
     await drain(service)
     assert len(provider.calls) == 1
-    now += timedelta(seconds=60)
-    service.request_refresh("mako", now.date())
-    await drain(service)
-    assert provider.calls[-1][1] == set(Sign) - {Sign.ARIES, Sign.TAURUS}
-    assert len(await store.forecasts("mako", now.date())) == 12
     await service.close()
+    restarted = HoroscopeService(store, [provider], lambda: now)
+    await restarted.maintain()
+    await drain(restarted)
+    assert len(provider.calls) == 1
+    assert len(await store.forecasts("mako", now.date())) == 2
+    await restarted.close()
 
 
 async def test_retry_after_and_day_rollover(store, forecasts, now):
@@ -239,17 +245,66 @@ async def test_cooldown_atomic_across_connections(tmp_path, now):
         await second.close()
 
 
-async def test_first_on_demand_request_enrolls_background_retry(store, now, forecasts):
-    provider = FakeProvider([])
+async def test_commands_read_cache_and_daily_job_fetches_without_subscribers(store, now, forecasts):
+    provider = FakeProvider(forecasts)
     service = HoroscopeService(store, [provider], lambda: now)
-    settings = GroupSettings(-1, provider="mako", fallback=False)
+    settings = GroupSettings(-1, fallback=False)
     assert (await service.request(settings)).error == UNAVAILABLE
-    await drain(service)
-    assert len(provider.calls) == 1
-    now += timedelta(seconds=60)
-    provider.items = forecasts
+    assert not provider.calls
+    assert not service._tasks
     await service.maintain()
     await drain(service)
-    assert len(provider.calls) == 2
+    assert len(provider.calls) == 1
     assert (await service.request(settings)).forecasts
+    assert (await service.request(replace(settings, chat_id=-2), Sign.ARIES)).forecasts
+    assert len(provider.calls) == 1
     await service.close()
+
+
+async def test_daily_job_waits_for_configured_israel_time(store, forecasts, now):
+    now = now.replace(hour=5, minute=59)
+    provider = FakeProvider(forecasts)
+    service = HoroscopeService(store, [provider], lambda: now, ingest_time="06:00")
+    await service.maintain()
+    assert not service._tasks
+    now += timedelta(minutes=1)
+    await service.maintain()
+    await drain(service)
+    assert len(provider.calls) == 1
+    await service.close()
+
+
+async def test_ingestion_claim_atomic_and_survives_database_restart(tmp_path, now):
+    path = str(tmp_path / "daily.db")
+    first, second = Store(path), Store(path)
+    await first.open()
+    await second.open()
+    assert sorted(
+        await asyncio.gather(
+            first.claim_ingestion("mako", now.date()),
+            second.claim_ingestion("mako", now.date()),
+        )
+    ) == [False, True]
+    await first.close()
+    await second.close()
+    await first.open()
+    assert not await first.claim_ingestion("mako", now.date())
+    assert await first.claim_ingestion("mako", now.date() + timedelta(days=1))
+    await first.close()
+
+
+async def test_legacy_default_word_cap_migrates_once_and_manual_caps_persist(tmp_path):
+    store = Store(str(tmp_path / "words.db"))
+    await store.open()
+    await store.save_settings(GroupSettings(-1, max_words=40))
+    await store.save_settings(GroupSettings(-2, max_words=60))
+    await store.db.execute("PRAGMA user_version=2")
+    await store.close()
+    await store.open()
+    assert (await store.settings(-1)).max_words == 0
+    assert (await store.settings(-2)).max_words == 60
+    await store.save_settings(GroupSettings(-1, max_words=40))
+    await store.close()
+    await store.open()
+    assert (await store.settings(-1)).max_words == 40
+    await store.close()

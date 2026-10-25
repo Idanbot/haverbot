@@ -5,12 +5,15 @@ from dataclasses import dataclass, field
 
 from dotenv import load_dotenv
 
+from haverbot.domain import validate_time
+
 
 @dataclass(frozen=True, slots=True)
 class Config:
     token: str = field(repr=False)
     database: str = "data/haverbot.sqlite3"
     log_level: str = "INFO"
+    ingest_time: str = "06:00"
 
     @classmethod
     def from_env(cls) -> Config:
@@ -22,4 +25,5 @@ class Config:
             token,
             os.environ.get("HAVERBOT_DATABASE", "data/haverbot.sqlite3"),
             os.environ.get("HAVERBOT_LOG_LEVEL", "INFO").upper(),
+            validate_time(os.environ.get("HAVERBOT_INGEST_TIME", "06:00")),
         )

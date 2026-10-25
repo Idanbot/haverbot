@@ -101,7 +101,7 @@ class GroupSettings:
     on_demand: bool = True
     bulletin_minutes: int = 15
     single_minutes: int = 1
-    max_words: int = 40
+    max_words: int = 0
 
     def __post_init__(self) -> None:
         validate_time(self.post_time)
@@ -113,5 +113,5 @@ class GroupSettings:
             raise ValueError("מקור לא מוכר.")
         if not self.signs or len(set(self.signs)) != len(self.signs):
             raise ValueError("יש לבחור לפחות מזל אחד, ללא כפילויות.")
-        if not 5 <= self.max_words <= 100:
+        if self.max_words != 0 and not 5 <= self.max_words <= 100:
             raise ValueError("מספר המילים חייב להיות בין 5 ל־100.")
