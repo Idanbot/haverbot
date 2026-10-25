@@ -1,0 +1,25 @@
+services:
+  haverbot:
+    image: ${HAVERBOT_IMAGE:-ghcr.io/idanbot/haverbot:latest}
+    restart: unless-stopped
+    init: true
+    env_file: .env
+    environment:
+      HAVERBOT_DATABASE: /data/haverbot.sqlite3
+      HAVERBOT_LOG_LEVEL: INFO
+    volumes:
+      - haverbot-data:/data
+    read_only: true
+    tmpfs:
+      - /tmp:size=32m,noexec,nosuid
+    cap_drop:
+      - ALL
+    stop_grace_period: 30s
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"
+
+volumes:
+  haverbot-data:
