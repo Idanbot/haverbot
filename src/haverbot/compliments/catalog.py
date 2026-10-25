@@ -52,8 +52,12 @@ def load_catalog(text: str) -> list[Compliment]:
 
 
 def bundled_catalog() -> list[Compliment]:
+    resources = files("haverbot.compliments").joinpath("resources")
     return load_catalog(
-        files("haverbot.compliments").joinpath("resources/female.he.jsonl").read_text("utf-8")
+        "\n".join(
+            resources.joinpath(name).read_text("utf-8")
+            for name in ("female.he.jsonl", "male.he.jsonl")
+        )
     )
 
 

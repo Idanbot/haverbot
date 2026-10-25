@@ -2,10 +2,9 @@
 
 Compliments are available only in private messages. Send `/start` or `/compliment`
 and the bot asks for a Hebrew name and preferred grammatical gender. The bundled
-catalog currently contains **500 distinct female Hebrew compliments**. A male
-profile can be saved, but will receive an availability message until male templates
-are imported. The bot never changes feminine wording mechanically or sends it to
-a profile configured for masculine wording.
+catalog contains **500 female and five male Hebrew compliments**. Each profile
+draws only from templates authored for its configured gender. The bot never
+changes grammatical gender mechanically.
 
 The entered name, gender, subscription, delivery claims, and draw history stay in
 SQLite on the Pi. Names are not inferred from Telegram profiles and are not logged.
@@ -44,7 +43,9 @@ consume a draw and a daily attempt. Full delivery guarantees are not assumed.
 
 The source file is
 [`src/haverbot/compliments/resources/female.he.jsonl`](../src/haverbot/compliments/resources/female.he.jsonl).
-It contains 500 UTF-8 JSON objects, one per line:
+It contains 500 UTF-8 JSON objects, one per line. The adjacent
+`male.he.jsonl` contains five masculine templates with IDs 501–505. Both files are
+loaded automatically. Example female record:
 
 ```json
 {"id":1,"gender":"נקבה","text":"{name}, את מביאה איתך אור נעים גם לימים עמוסים."}
@@ -53,7 +54,7 @@ It contains 500 UTF-8 JSON objects, one per line:
 `id` is a stable positive integer identifying the compliment. The name is supplied
 from the private profile and replaces the single `{name}` placeholder. Gender is
 `נקבה` or `זכר`, with the complete text authored in that gender. IDs are unique
-across all genders; use 501 and above for additional entries. Keep existing IDs
+across all genders; use 506 and above for additional entries. Keep existing IDs
 stable to preserve draw history. Text must be one line of Hebrew with punctuation,
 15–600 characters long, with no other template fields or formatting instructions.
 Actual recipient names or Telegram IDs never belong in the JSONL file.
@@ -64,7 +65,7 @@ requests use SQLite only and require no remote API or content generation service
 
 ## Import or update on the Pi
 
-A normal image update seeds all 500 bundled entries automatically. No manual
+A normal image update seeds all 505 bundled entries automatically. No manual
 insertion is needed. To import a custom file, validate and load it using:
 
 ```sh

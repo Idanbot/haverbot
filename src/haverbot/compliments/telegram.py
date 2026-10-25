@@ -18,7 +18,7 @@ from haverbot.domain import israel_now, validate_time
 
 logger = logging.getLogger(__name__)
 Context = ContextTypes.DEFAULT_TYPE
-NO_CONTENT = "כרגע יש מחמאות בנוסח נקבה בלבד. אפשר לשנות את לשון הפנייה בהגדרות המחמאות."
+NO_CONTENT = "לא נמצאו מחמאות בלשון הפנייה שנבחרה. אפשר לבדוק את הגדרות המחמאות."
 SETTINGS_KEYS = {"compliments", "name", "gender", "compliment_time"}
 
 
@@ -182,7 +182,7 @@ class ComplimentController:
                     await self.repository.setup(chat_id, "gender", name)
                     await self.say(
                         chat_id,
-                        "באיזו לשון לפנות? כרגע יש מחמאות בנוסח נקבה בלבד.",
+                        "באיזו לשון לפנות? המחמאות יותאמו לבחירה.",
                         gender_buttons(),
                     )
             elif pending[0] == "gender":

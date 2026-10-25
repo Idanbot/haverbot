@@ -7,7 +7,7 @@ Pick your signs, provider, and posting time—or ask whenever you like.
 - 🇮🇱 Israel time, Hebrew dates, and Hebrew messages.
 - 📰 Israel Hayom and mako adapters with automatic fallback.
 - ⚙️ Personal DM settings, admin-controlled groups, and full-forecast buttons.
-- 💝 500 Hebrew compliments, personal name/gender settings, and optional daily delivery.
+- 💝 505 Hebrew compliments, personal name/gender settings, and optional daily delivery.
 - 💾 One daily ingestion, seven days of SQLite cache, and previews sized to fit.
 - 🐳 Python 3.15.1 + uv; Docker images for ARM64 and AMD64.
 
@@ -38,7 +38,7 @@ Add the bot to your group as an admin, then run:
 
 You can also open a private chat and run `/start`. It asks for a Hebrew name and
 grammatical gender for compliments. Use `/compliment` for a random compliment, or
-`/compliments` to enable daily compliments. The catalog is female-only for now;
+`/compliments` to enable daily compliments. The catalog includes 500 female and five male compliments;
 names and profiles stay in the private SQLite volume.
 Anyone can use `/horoscope` or `/sign אריה`. Group admins control the provider,
 selected signs, on-demand access, and cooldowns through `/settings`.
@@ -75,4 +75,4 @@ secret stays on the Pi.
 See the [full guide](docs/usage.md) and [architecture](docs/architecture.md) for details.
 
 See the [compliments guide](docs/compliments.md) for settings, JSONL format, and
-SSH import commands for the Pi. The 500 bundled records load automatically.
+SSH import commands for the Pi. The 505 bundled records load automatically.

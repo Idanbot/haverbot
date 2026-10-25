@@ -35,12 +35,13 @@ async def repository(store):
     return repo
 
 
-def test_catalog_has_500_distinct_female_hebrew_personalized_lines():
+def test_catalog_has_500_female_and_five_male_hebrew_personalized_lines():
     items = bundled_catalog()
-    assert len(items) == 500
-    assert {item.id for item in items} == set(range(1, 501))
-    assert len({item.text for item in items}) == 500
-    assert all(item.gender == Gender.FEMALE for item in items)
+    assert len(items) == 505
+    assert {item.id for item in items} == set(range(1, 506))
+    assert len({item.text for item in items}) == 505
+    assert sum(item.gender == Gender.FEMALE for item in items) == 500
+    assert sum(item.gender == Gender.MALE for item in items) == 5
     assert all(
         "נועה" in item.render("נועה") and "{name}" not in item.render("נועה") for item in items
     )
@@ -120,13 +121,18 @@ async def test_concurrent_draws_and_user_histories_are_independent(repository):
         assert (await cursor.fetchone())[0] == 1
 
 
-async def test_missing_gender_never_receives_female_wording(repository):
+async def test_missing_gender_never_receives_female_wording(store):
+    repository = ComplimentRepository(store)
+    await repository.import_catalog(
+        [item for item in bundled_catalog() if item.gender == Gender.FEMALE]
+    )
     await repository.save_profile(Profile(17, "נועם", Gender.MALE))
     assert await repository.draw(17) is None
     await repository.import_catalog(
         [Compliment(501, Gender.MALE, "{name}, אתה קשוב ומלא באכפתיות.")]
     )
     result = await repository.draw(17)
+    assert result is not None
     assert result[1].gender == Gender.MALE
     assert "אתה" in result[1].render(result[0].name)
 
@@ -190,7 +196,7 @@ async def test_gender_changes_disable_daily_until_explicitly_enabled(repository,
     assert (await repository.profile(17)).gender == Gender.MALE
     assert not (await repository.profile(17)).enabled
     await controller.settings(event(), context("compliments", "on"))
-    assert not (await repository.profile(17)).enabled
+    assert (await repository.profile(17)).enabled
     await controller.callback(event(data="cmp:gender:נקבה"), context())
     await controller.callback(event(data="cmp:toggle"), context())
     assert (await repository.profile(17)).enabled
@@ -258,3 +264,13 @@ async def test_import_rolls_back_all_records_when_existing_text_conflicts(reposi
     async with repository.store.db.execute("SELECT text FROM compliments WHERE id=1") as cursor:
         assert (await cursor.fetchone())[0] == original[0].text
     assert await repository.count(Gender.FEMALE) == 500
+
+
+async def test_male_draws_use_all_five_templates_then_avoid_immediate_repeat(repository):
+    await repository.save_profile(Profile(17, "נועם", Gender.MALE))
+    draws = [await repository.draw(17) for _ in range(6)]
+    assert all(item is not None for item in draws)
+    records = [item[1] for item in draws if item is not None]
+    assert {item.id for item in records[:5]} == set(range(501, 506))
+    assert records[5].id != records[4].id
+    assert all(item.gender == Gender.MALE and "אתה" in item.render("נועם") for item in records)
