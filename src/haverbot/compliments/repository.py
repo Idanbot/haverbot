@@ -4,20 +4,22 @@ import asyncio
 from datetime import date
 from typing import TYPE_CHECKING
 
-from haverbot.compliments.domain import Compliment, Gender, Profile
+from haverbot.compliments.domain import Category, Compliment, Gender, Profile
 
 if TYPE_CHECKING:
     from haverbot.storage import Store
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS compliments (
-    id INTEGER PRIMARY KEY, gender TEXT NOT NULL, text TEXT NOT NULL, UNIQUE(gender,text)
+    id INTEGER PRIMARY KEY, gender TEXT NOT NULL, text TEXT NOT NULL,
+    category TEXT NOT NULL DEFAULT 'כללית', UNIQUE(gender,text)
 );
 CREATE INDEX IF NOT EXISTS compliments_gender ON compliments(gender);
 CREATE TABLE IF NOT EXISTS compliment_profiles (
     chat_id INTEGER PRIMARY KEY CHECK(chat_id>0), name TEXT NOT NULL,
     gender TEXT NOT NULL, enabled INTEGER NOT NULL DEFAULT 0,
-    post_time TEXT NOT NULL DEFAULT '09:00', last_id INTEGER
+    post_time TEXT NOT NULL DEFAULT '09:00', last_id INTEGER,
+    general_enabled INTEGER NOT NULL DEFAULT 1, romantic_enabled INTEGER NOT NULL DEFAULT 0
 );
 CREATE TABLE IF NOT EXISTS compliment_setup (
     chat_id INTEGER PRIMARY KEY CHECK(chat_id>0), step TEXT NOT NULL, name TEXT
@@ -34,6 +36,33 @@ CREATE TABLE IF NOT EXISTS compliment_deliveries (
 """
 
 
+async def migrate_schema(store: Store) -> None:
+    """Add category preferences without changing profiles, subscriptions or draw history."""
+    await store.db.execute("BEGIN IMMEDIATE")
+    try:
+        additions = {
+            "compliments": {"category": "TEXT NOT NULL DEFAULT 'כללית'"},
+            "compliment_profiles": {
+                "general_enabled": "INTEGER NOT NULL DEFAULT 1",
+                "romantic_enabled": "INTEGER NOT NULL DEFAULT 0",
+            },
+        }
+        for table, columns in additions.items():
+            async with store.db.execute(f"PRAGMA table_info({table})") as cursor:
+                existing = {row[1] for row in await cursor.fetchall()}
+            for column, definition in columns.items():
+                if column not in existing:
+                    await store.db.execute(f"ALTER TABLE {table} ADD COLUMN {column} {definition}")
+        await store.db.execute(
+            "CREATE INDEX IF NOT EXISTS compliments_selection ON compliments(gender,category)"
+        )
+        await store.db.execute("PRAGMA user_version=5")
+        await store.db.commit()
+    except BaseException:
+        await store.db.rollback()
+        raise
+
+
 class ComplimentRepository:
     def __init__(self, store: Store) -> None:
         self.store = store
@@ -41,16 +70,18 @@ class ComplimentRepository:
 
     async def import_catalog(self, items: list[Compliment], *, update: bool = False) -> int:
         # Importers validate the entire file before starting this transaction.
-        sql = "INSERT OR IGNORE INTO compliments VALUES (?,?,?)"
+        sql = "INSERT OR IGNORE INTO compliments(id,gender,text,category) VALUES (?,?,?,?)"
         if update:
             sql = (
-                "INSERT INTO compliments VALUES (?,?,?) ON CONFLICT(id) "
-                "DO UPDATE SET gender=excluded.gender, text=excluded.text"
+                "INSERT INTO compliments(id,gender,text,category) VALUES (?,?,?,?) ON CONFLICT(id) "
+                "DO UPDATE SET gender=excluded.gender,text=excluded.text,"
+                "category=excluded.category"
             )
         await self.store.db.execute("BEGIN IMMEDIATE")
         try:
             cursor = await self.store.db.executemany(
-                sql, [(item.id, item.gender.value, item.text) for item in items]
+                sql,
+                [(item.id, item.gender.value, item.text, item.category.value) for item in items],
             )
             count = cursor.rowcount
             await cursor.close()
@@ -60,29 +91,49 @@ class ComplimentRepository:
             await self.store.db.rollback()
             raise
 
-    async def count(self, gender: Gender) -> int:
+    async def count(self, gender: Gender, categories: tuple[Category, ...] | None = None) -> int:
+        categories = tuple(Category) if categories is None else categories
+        if not categories:
+            return 0
+        placeholders = ",".join("?" for _ in categories)
         async with self.store.db.execute(
-            "SELECT count(*) FROM compliments WHERE gender=?", (gender.value,)
+            f"SELECT count(*) FROM compliments WHERE gender=? AND category IN ({placeholders})",
+            (gender.value, *(category.value for category in categories)),
         ) as cursor:
             row = await cursor.fetchone()
         return int(row[0]) if row else 0
 
     async def profile(self, chat_id: int) -> Profile | None:
         async with self.store.db.execute(
-            "SELECT chat_id,name,gender,enabled,post_time,last_id FROM compliment_profiles "
+            "SELECT chat_id,name,gender,enabled,post_time,last_id,general_enabled,romantic_enabled "
+            "FROM compliment_profiles "
             "WHERE chat_id=?",
             (chat_id,),
         ) as cursor:
             row = await cursor.fetchone()
         return (
-            Profile(row[0], row[1], Gender(row[2]), bool(row[3]), row[4], row[5]) if row else None
+            Profile(
+                row[0],
+                row[1],
+                Gender(row[2]),
+                bool(row[3]),
+                row[4],
+                row[5],
+                bool(row[6]),
+                bool(row[7]),
+            )
+            if row
+            else None
         )
 
     async def save_profile(self, profile: Profile) -> None:
         await self.store.db.execute(
-            "INSERT INTO compliment_profiles VALUES (?,?,?,?,?,?) ON CONFLICT(chat_id) "
+            "INSERT INTO compliment_profiles "
+            "(chat_id,name,gender,enabled,post_time,last_id,general_enabled,romantic_enabled) "
+            "VALUES (?,?,?,?,?,?,?,?) ON CONFLICT(chat_id) "
             "DO UPDATE SET name=excluded.name,gender=excluded.gender,enabled=excluded.enabled,"
-            "post_time=excluded.post_time",
+            "post_time=excluded.post_time,general_enabled=excluded.general_enabled,"
+            "romantic_enabled=excluded.romantic_enabled",
             (
                 profile.chat_id,
                 profile.name,
@@ -90,6 +141,8 @@ class ComplimentRepository:
                 profile.enabled,
                 profile.post_time,
                 profile.last_id,
+                profile.general,
+                profile.romantic,
             ),
         )
 
@@ -117,9 +170,11 @@ class ComplimentRepository:
             if profile is None:
                 return None
             # One atomic insert/select reserves a random unused id even when called concurrently.
-            sql = """
+            categories = tuple(category.value for category in profile.categories)
+            placeholders = ",".join("?" for _ in categories)
+            sql = f"""
                 INSERT INTO compliment_history(chat_id,compliment_id)
-                SELECT ?,id FROM compliments WHERE gender=?
+                SELECT ?,id FROM compliments WHERE gender=? AND category IN ({placeholders})
                     AND (? IS NULL OR id!=?)
                     AND NOT EXISTS (SELECT 1 FROM compliment_history
                                     WHERE chat_id=? AND compliment_id=compliments.id)
@@ -129,7 +184,7 @@ class ComplimentRepository:
             async def reserve(exclude: int | None):
                 async with self.store.db.execute(
                     sql,
-                    (chat_id, profile.gender.value, exclude, exclude, chat_id),
+                    (chat_id, profile.gender.value, *categories, exclude, exclude, chat_id),
                 ) as cursor:
                     return await cursor.fetchone()
 
@@ -137,8 +192,8 @@ class ComplimentRepository:
             if row is None:
                 await self.store.db.execute(
                     "DELETE FROM compliment_history WHERE chat_id=? AND compliment_id IN "
-                    "(SELECT id FROM compliments WHERE gender=?)",
-                    (chat_id, profile.gender.value),
+                    f"(SELECT id FROM compliments WHERE gender=? AND category IN ({placeholders}))",
+                    (chat_id, profile.gender.value, *categories),
                 )
                 row = await reserve(profile.last_id)
                 if row is None:
@@ -147,7 +202,7 @@ class ComplimentRepository:
                 return None
             identity = row[0]
             async with self.store.db.execute(
-                "SELECT text FROM compliments WHERE id=?",
+                "SELECT text,category FROM compliments WHERE id=?",
                 (identity,),
             ) as cursor:
                 item = await cursor.fetchone()
@@ -155,7 +210,11 @@ class ComplimentRepository:
                 "UPDATE compliment_profiles SET last_id=? WHERE chat_id=?",
                 (identity, chat_id),
             )
-            return (profile, Compliment(identity, profile.gender, item[0])) if item else None
+            return (
+                (profile, Compliment(identity, profile.gender, item[0], Category(item[1])))
+                if item
+                else None
+            )
 
     async def due_profiles(self, time: str) -> list[Profile]:
         async with self.store.db.execute(

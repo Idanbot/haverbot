@@ -18,8 +18,8 @@ from haverbot.domain import israel_now, validate_time
 
 logger = logging.getLogger(__name__)
 Context = ContextTypes.DEFAULT_TYPE
-NO_CONTENT = "לא נמצאו מחמאות בלשון הפנייה שנבחרה. אפשר לבדוק את הגדרות המחמאות."
-SETTINGS_KEYS = {"compliments", "name", "gender", "compliment_time"}
+NO_CONTENT = "לא נמצאו מחמאות בלשון הפנייה ובסוגים שנבחרו. אפשר לבדוק את הגדרות המחמאות."
+SETTINGS_KEYS = {"compliments", "name", "gender", "compliment_time", "general", "romantic"}
 
 
 def gender_buttons() -> InlineKeyboardMarkup:
@@ -97,11 +97,14 @@ class ComplimentController:
             chat_id,
             "💝 <b>הגדרות מחמאות אישיות</b>\n"
             f"שם: {escape(profile.name)}\nלשון פנייה: {profile.gender.value}\n"
-            f"מחמאות יומיות: {status}\nשעה בישראל: {profile.post_time}\n\n"
+            f"מחמאות יומיות: {status}\nשעה בישראל: {profile.post_time}\n"
+            f"כלליות: {'פעילות' if profile.general else 'כבויות'}\n"
+            f"רומנטיות: {'פעילות' if profile.romantic else 'כבויות'}\n\n"
             "מחמאה אקראית: /compliment\n"
             "שינוי שם: /settings name נועה\n"
             "שינוי לשון פנייה: /settings gender נקבה\n"
             "שינוי שעה: /settings compliment_time 09:00\n"
+            "כלליות: /settings general on\nרומנטיות: /settings romantic on\n"
             "הפעלה: /settings compliments on\nכיבוי: /settings compliments off\n"
             "למחיקת השם וכל ההגדרות בצ׳אט: /forget",
             InlineKeyboardMarkup(
@@ -115,6 +118,16 @@ class ComplimentController:
                         InlineKeyboardButton(
                             "כיבוי יומי" if profile.enabled else "הפעלה יומית",
                             callback_data="cmp:toggle",
+                        ),
+                    ],
+                    [
+                        InlineKeyboardButton(
+                            ("✅ " if profile.general else "❌ ") + "כלליות",
+                            callback_data="cmp:category:general",
+                        ),
+                        InlineKeyboardButton(
+                            ("✅ " if profile.romantic else "❌ ") + "רומנטיות",
+                            callback_data="cmp:category:romantic",
                         ),
                     ],
                     [InlineKeyboardButton("מחמאה עכשיו", callback_data="cmp:draw")],
@@ -144,10 +157,16 @@ class ComplimentController:
                 if value:
                     if value not in {"on", "off"}:
                         raise ValueError("יש לבחור on או off.")
-                    if value == "on" and not await self.repository.count(profile.gender):
+                    if value == "on" and not await self.repository.count(
+                        profile.gender, profile.categories
+                    ):
                         await self.say(chat_id, NO_CONTENT)
                         return True
                     profile = replace(profile, enabled=value == "on")
+            elif key in {"general", "romantic"}:
+                if value not in {"on", "off"}:
+                    raise ValueError("יש לבחור on או off.")
+                profile = replace(profile, **{key: value == "on"})
             elif key == "name":
                 profile = replace(profile, name=validate_name(value))
             elif key == "gender":
@@ -155,11 +174,12 @@ class ComplimentController:
             elif key == "compliment_time":
                 profile = replace(profile, post_time=validate_time(value))
             await self.repository.save_profile(profile)
-            if not await self.repository.count(profile.gender):
+            if not await self.repository.count(profile.gender, profile.categories):
                 await self.say(chat_id, NO_CONTENT)
             await self.show_settings(chat_id)
-        except ValueError:
-            await self.say(chat_id, "הערך אינו תקין. השם ולשון הפנייה בעברית; שעה בפורמט HH:MM.")
+        except ValueError as exc:
+            message = "יש לבחור נקבה או זכר." if key == "gender" else str(exc)
+            await self.say(chat_id, escape(message))
         return True
 
     async def text(self, update: Update, context: Context) -> None:
@@ -209,8 +229,10 @@ class ComplimentController:
         await self.repository.clear_setup(chat_id)
         if profile is None:
             await self.send_compliment(chat_id)
-        elif not await self.repository.count(gender):
-            await self.say(chat_id, NO_CONTENT)
+        else:
+            updated = await self.repository.profile(chat_id)
+            if updated and not await self.repository.count(gender, updated.categories):
+                await self.say(chat_id, NO_CONTENT)
         await self.show_settings(chat_id)
 
     async def callback(self, update: Update, context: Context) -> None:
@@ -239,19 +261,31 @@ class ComplimentController:
                 else:
                     await self.repository.setup(chat_id, "time")
                     await self.say(chat_id, "באיזו שעה בישראל לשלוח מחמאה יומית? למשל 09:00")
+            elif len(action) == 3 and action[:2] == ["cmp", "category"]:
+                profile = await self.repository.profile(chat_id)
+                if profile is None:
+                    await self.begin(chat_id)
+                elif action[2] in {"general", "romantic"}:
+                    await self.repository.save_profile(
+                        replace(profile, **{action[2]: not getattr(profile, action[2])})
+                    )
+                    await self.show_settings(chat_id)
             elif action == ["cmp", "toggle"]:
                 profile = await self.repository.profile(chat_id)
                 if profile is None:
                     await self.begin(chat_id)
-                elif not profile.enabled and not await self.repository.count(profile.gender):
+                elif not profile.enabled and not await self.repository.count(
+                    profile.gender, profile.categories
+                ):
                     await self.say(chat_id, NO_CONTENT)
                 else:
                     await self.repository.save_profile(
                         replace(profile, enabled=not profile.enabled)
                     )
                     await self.show_settings(chat_id)
-        except ValueError:
-            await self.say(chat_id, "הבחירה אינה תקינה.")
+        except ValueError as exc:
+            message = str(exc) if action[:2] == ["cmp", "category"] else "הבחירה אינה תקינה."
+            await self.say(chat_id, escape(message))
 
     async def unsubscribe(self, chat_id: int) -> None:
         profile = await self.repository.profile(chat_id)

@@ -37,7 +37,7 @@ def test_composition_lifecycle_without_telegram_network(monkeypatch, tmp_path):
         async def lifecycle():
             await application.post_init(application)
             with closing(sqlite3.connect(tmp_path / "state.db")) as connection:
-                assert connection.execute("SELECT count(*) FROM compliments").fetchone()[0] == 505
+                assert connection.execute("SELECT count(*) FROM compliments").fetchone()[0] == 755
             await asyncio.sleep(0)
             await application.post_stop(application)
             await application.post_shutdown(application)

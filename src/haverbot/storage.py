@@ -10,6 +10,7 @@ from typing import Literal
 import aiosqlite
 
 from haverbot.compliments.repository import SCHEMA as COMPLIMENT_SCHEMA
+from haverbot.compliments.repository import migrate_schema as migrate_compliments
 from haverbot.domain import Forecast, GroupSettings, Sign
 
 Bucket = Literal["bulletin", "single"]
@@ -60,9 +61,9 @@ class Store:
             UPDATE groups SET settings=json_set(settings, '$.max_words', 0)
             WHERE json_extract(settings, '$.max_words')=40
                 AND (SELECT user_version FROM pragma_user_version)<3;
-            PRAGMA user_version=4;
         """)
         await self.db.executescript(COMPLIMENT_SCHEMA)
+        await migrate_compliments(self)
 
     async def close(self) -> None:
         if self._db is not None:

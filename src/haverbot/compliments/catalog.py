@@ -6,7 +6,7 @@ from importlib.resources import files
 from pathlib import Path
 from string import Formatter
 
-from haverbot.compliments.domain import Compliment, Gender
+from haverbot.compliments.domain import Category, Compliment, Gender
 
 
 def load_catalog(text: str) -> list[Compliment]:
@@ -18,9 +18,14 @@ def load_catalog(text: str) -> list[Compliment]:
             continue
         try:
             data = json.loads(line)
-            if not isinstance(data, dict) or set(data) != {"id", "gender", "text"}:
-                raise ValueError("expected id, gender, text")
+            if (
+                not isinstance(data, dict)
+                or not {"id", "gender", "text"} <= set(data)
+                or set(data) - {"id", "gender", "text", "category"}
+            ):
+                raise ValueError("expected id, gender, text and optional category")
             identity, gender, template = data["id"], Gender(data["gender"]), data["text"]
+            category = Category(data.get("category", Category.GENERAL))
             if type(identity) is not int or identity <= 0 or identity in ids:
                 raise ValueError("invalid or duplicate id")
             if not isinstance(template, str) or not 15 <= len(template) <= 600:
@@ -43,7 +48,7 @@ def load_catalog(text: str) -> list[Compliment]:
                 raise ValueError("duplicate compliment text")
             ids.add(identity)
             texts.add((gender, template))
-            records.append(Compliment(identity, gender, template))
+            records.append(Compliment(identity, gender, template, category))
         except (ValueError, TypeError, KeyError) as exc:
             raise ValueError(f"Invalid compliment JSONL line {number}: {exc}") from None
     if not records:
@@ -56,7 +61,12 @@ def bundled_catalog() -> list[Compliment]:
     return load_catalog(
         "\n".join(
             resources.joinpath(name).read_text("utf-8")
-            for name in ("female.he.jsonl", "male.he.jsonl")
+            for name in (
+                "female.he.jsonl",
+                "male.he.jsonl",
+                "female.romantic.he.jsonl",
+                "male.romantic.he.jsonl",
+            )
         )
     )
 
