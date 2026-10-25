@@ -32,7 +32,7 @@ HoroscopeService ◄──────── Scheduler
   SQLite UPSERTs atomically claim cooldowns even across connections. Delivery
   primary keys prevent repeated daily attempts. `user_version=1` identifies the
   initial schema; future changes should introduce explicit migrations.
-* `providers/`: public-page extraction. Each provider returns only dated daily
+* `providers/`: public HTML/JSON extraction. Each provider returns only dated daily
   forecasts it can verify. HTTP timeouts, response bounds, pacing, and safe failures
   live in the shared fetcher. Parsers accept HTML strings, enabling fixture tests.
 * `service.py`: shared fetch tasks, partial cache completion, retry state,

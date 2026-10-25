@@ -22,9 +22,12 @@ BROWSER_HEADERS = {
 
 
 class ProviderError(Exception):
-    def __init__(self, message: str, retry_after: float = 0) -> None:
+    def __init__(
+        self, message: str, retry_after: float = 0, *, status_code: int | None = None
+    ) -> None:
         super().__init__(message)
         self.retry_after = retry_after
+        self.status_code = status_code
 
 
 class Fetcher(Protocol):
@@ -80,6 +83,10 @@ class HttpFetcher:
                             raise ProviderError("Response too large")
                     # These providers publish UTF-8, sometimes with a misleading legacy header.
                     text = body.decode("utf-8", errors="replace")
+            except httpx.HTTPStatusError as exc:
+                raise ProviderError(
+                    f"HTTP {exc.response.status_code}", status_code=exc.response.status_code
+                ) from None
             except httpx.HTTPError as exc:
                 # Do not include URLs or response bodies in logs.
                 raise ProviderError(type(exc).__name__) from None

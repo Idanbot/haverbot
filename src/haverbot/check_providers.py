@@ -2,6 +2,7 @@
 
 import argparse
 import asyncio
+from datetime import date
 
 import httpx
 
@@ -12,8 +13,8 @@ from haverbot.providers.mako import MakoProvider
 from haverbot.providers.walla import WallaProvider
 
 
-async def check(names: list[str]) -> int:
-    day = israel_now().date()
+async def check(names: list[str], day: date | None = None) -> int:
+    day = day or israel_now().date()
     success = False
     async with httpx.AsyncClient(
         timeout=20,
@@ -39,8 +40,9 @@ async def check(names: list[str]) -> int:
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("providers", nargs="*", choices=["israelhayom", "walla", "mako"])
+    parser.add_argument("--date", type=date.fromisoformat, help="Forecast date YYYY-MM-DD")
     args = parser.parse_args()
-    raise SystemExit(asyncio.run(check(args.providers)))
+    raise SystemExit(asyncio.run(check(args.providers, args.date)))
 
 
 if __name__ == "__main__":

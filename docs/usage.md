@@ -111,6 +111,8 @@ storing group data, or printing source text:
 ```sh
 uv run haverbot-check-providers mako
 uv run haverbot-check-providers israelhayom walla mako
+# Check a specific forecast date without caching it:
+uv run haverbot-check-providers --date 2026-06-01 walla
 # In the built image:
 docker compose run --rm --no-deps --entrypoint haverbot-check-providers haverbot mako
 ```

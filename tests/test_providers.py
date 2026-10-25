@@ -168,6 +168,8 @@ async def test_israelhayom_adapter_discovers_then_fetches():
 
 async def test_walla_fetch_keeps_partial_results_when_next_sign_blocked():
     def response(request):
+        if request.url.path == "/horoscope/daily":
+            return httpx.Response(404)
         if request.url.path == "/zodiac/1":
             return httpx.Response(200, text=fixture("walla.html"))
         return httpx.Response(403)
@@ -175,6 +177,56 @@ async def test_walla_fetch_keeps_partial_results_when_next_sign_blocked():
     async with httpx.AsyncClient(transport=httpx.MockTransport(response)) as client:
         items = await WallaProvider(HttpFetcher(client, 0)).fetch(DAY, {Sign.ARIES, Sign.LEO})
         assert len(items) == 1 and items[0].sign == Sign.ARIES
+
+
+async def test_walla_daily_api_requests_exact_day_and_only_missing_signs():
+    requests = []
+
+    def response(request):
+        requests.append(request)
+        return httpx.Response(
+            200,
+            json={
+                "result": "success",
+                "data": {"title": None, "text": "תחזית יומית מלאה למזל אריה."},
+            },
+        )
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(response)) as client:
+        items = await WallaProvider(HttpFetcher(client, 0)).fetch(DAY, {Sign.LEO})
+    assert len(requests) == 1
+    assert dict(requests[0].url.params) == {
+        "id": "5",
+        "date": "25102026",
+        "from": "horoscope.walla.co.il",
+    }
+    assert len(items) == 1
+    assert (items[0].provider, items[0].day, items[0].sign) == ("walla", DAY, Sign.LEO)
+    assert items[0].source_url == "https://horoscope.walla.co.il/zodiac/5"
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        "bad",
+        "[]",
+        '{"result":"error"}',
+        '{"result":"success","data":null}',
+        '{"result":"success","data":{"text":null}}',
+    ],
+)
+def test_walla_rejects_invalid_daily_api_payloads(payload):
+    assert WallaProvider.parse_daily(payload, DAY, Sign.LEO, "https://example.com") is None
+
+
+async def test_walla_absent_api_and_empty_page_never_become_a_forecast():
+    def response(request):
+        if request.url.host == "dal.walla.co.il":
+            return httpx.Response(404, json={"code": 404})
+        return httpx.Response(200, text='<section class="today-horoscope"></section>')
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(response)) as client:
+        assert await WallaProvider(HttpFetcher(client, 0)).fetch(DAY, {Sign.ARIES}) == []
 
 
 async def test_walla_access_failure_backoff_is_preserved():

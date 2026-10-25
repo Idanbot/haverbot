@@ -1,5 +1,6 @@
-"""Walla sign pages: only the dated daily section qualifies, never profile/yearly text."""
+"""Aggregate Walla's dated per-sign daily API, with rendered-page fallback."""
 
+import json
 import logging
 from datetime import date
 
@@ -15,6 +16,30 @@ class WallaProvider:
 
     def __init__(self, fetcher: Fetcher) -> None:
         self.fetcher = fetcher
+
+    @staticmethod
+    def daily_url(day: date, sign: Sign) -> str:
+        # This is the public endpoint and date format used by Walla's frontend.
+        index = list(Sign).index(sign) + 1
+        return (
+            f"https://dal.walla.co.il/horoscope/daily?id={index}"
+            f"&date={day:%d%m%Y}&from=horoscope.walla.co.il"
+        )
+
+    @classmethod
+    def parse_daily(cls, payload: str, day: date, sign: Sign, url: str) -> Forecast | None:
+        try:
+            data = json.loads(payload)
+        except ValueError, TypeError:
+            return None
+        if not isinstance(data, dict) or data.get("result") != "success":
+            return None
+        content = data.get("data")
+        if not isinstance(content, dict) or not isinstance(content.get("text"), str):
+            return None
+        # The API binds the forecast date and sign in the request, rather than
+        # repeating them in its {title, text} response. Never use an undated API.
+        return forecast(cls.id, day, sign, soup(content["text"]).get_text(" ", strip=True), url)
 
     @classmethod
     def parse(cls, html: str, day: date, sign: Sign, url: str) -> Forecast | None:
@@ -40,7 +65,17 @@ class WallaProvider:
                 continue
             url = f"{self.base}/zodiac/{index}"
             try:
-                item = self.parse(await self.fetcher.get(url), day, sign, url)
+                item = None
+                try:
+                    payload = await self.fetcher.get(self.daily_url(day, sign))
+                    item = self.parse_daily(payload, day, sign, url)
+                except ProviderError as exc:
+                    # Walla returns 404 when that sign/date has no forecast.
+                    # Access denials and throttling must retain their backoff.
+                    if exc.status_code != 404:
+                        raise
+                if item is None:
+                    item = self.parse(await self.fetcher.get(url), day, sign, url)
                 if item:
                     result.append(item)
             except ProviderError as exc:
