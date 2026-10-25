@@ -22,9 +22,8 @@ docker compose pull
 docker compose up -d
 ```
 
-Compose uses `ghcr.io/idanbot/haverbot:latest`. After the first CI publication,
-make the [GHCR package](https://github.com/users/Idanbot/packages/container/haverbot/settings)
-**public** once so the Pi can pull without logging in.
+Compose pulls the public `ghcr.io/idanbot/haverbot:latest` image automatically for
+your architecture. No registry login or on-device build is needed.
 
 Add the bot to your group as an admin, then run:
 
