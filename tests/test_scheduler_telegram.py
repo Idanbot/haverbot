@@ -117,7 +117,7 @@ async def test_admin_changes_are_group_scoped_and_settings_are_hebrew(store, now
 
 async def test_full_button_is_same_provider_date_after_group_settings_change(store, now, forecasts):
     await store.put_forecasts(forecasts)
-    await store.save_settings(GroupSettings(-1, provider="walla"))
+    await store.save_settings(GroupSettings(-1, provider="israelhayom"))
     service = HoroscopeService(store, [], lambda: now)
     bot: Any = SimpleNamespace(send_message=AsyncMock())
     controller = TelegramController(store, service, bot)

@@ -16,7 +16,6 @@ from haverbot.config import Config
 from haverbot.providers.base import BROWSER_HEADERS, HttpFetcher
 from haverbot.providers.israelhayom import IsraelHayomProvider
 from haverbot.providers.mako import MakoProvider
-from haverbot.providers.walla import WallaProvider
 from haverbot.scheduler import Scheduler
 from haverbot.service import HoroscopeService
 from haverbot.storage import Store
@@ -40,9 +39,7 @@ def main() -> None:
         headers=BROWSER_HEADERS,
     )
     fetcher = HttpFetcher(client)
-    service = HoroscopeService(
-        store, [MakoProvider(fetcher), IsraelHayomProvider(fetcher), WallaProvider(fetcher)]
-    )
+    service = HoroscopeService(store, [MakoProvider(fetcher), IsraelHayomProvider(fetcher)])
     worker: asyncio.Task[None] | None = None
 
     async def start(application: Application) -> None:

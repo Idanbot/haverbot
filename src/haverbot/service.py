@@ -45,7 +45,11 @@ class HoroscopeService:
         self._tasks: dict[tuple[str, date], asyncio.Task[None]] = {}
 
     def request_refresh(self, provider: str, day: date) -> None:
-        if provider not in self.providers or day != self.clock().date():
+        if (
+            provider not in PROVIDER_NAMES
+            or provider not in self.providers
+            or day != self.clock().date()
+        ):
             return
         key = provider, day
         state = self._states.setdefault(key, RetryState())
@@ -131,6 +135,8 @@ class HoroscopeService:
         bucket: Bucket = "single" if sign is not None or exact is not None else "bulletin"
         if exact is not None:
             provider, day, exact_sign = exact
+            if provider not in PROVIDER_NAMES:
+                return RequestResult(error=UNAVAILABLE)
             if not now.date() - timedelta(days=6) <= day <= now.date():
                 return RequestResult(error=EXPIRED)
             cached = await self.store.forecasts(provider, day)

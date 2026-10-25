@@ -6,11 +6,10 @@ from datetime import date
 
 import httpx
 
-from haverbot.domain import Sign, israel_now
+from haverbot.domain import PROVIDER_NAMES, Sign, israel_now
 from haverbot.providers.base import BROWSER_HEADERS, HttpFetcher, ProviderError
 from haverbot.providers.israelhayom import IsraelHayomProvider
 from haverbot.providers.mako import MakoProvider
-from haverbot.providers.walla import WallaProvider
 
 
 async def check(names: list[str], day: date | None = None) -> int:
@@ -22,7 +21,7 @@ async def check(names: list[str], day: date | None = None) -> int:
         headers=BROWSER_HEADERS,
     ) as client:
         fetcher = HttpFetcher(client)
-        providers = [IsraelHayomProvider(fetcher), WallaProvider(fetcher), MakoProvider(fetcher)]
+        providers = [IsraelHayomProvider(fetcher), MakoProvider(fetcher)]
         for provider in providers:
             if names and provider.id not in names:
                 continue
@@ -39,7 +38,7 @@ async def check(names: list[str], day: date | None = None) -> int:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("providers", nargs="*", choices=["israelhayom", "walla", "mako"])
+    parser.add_argument("providers", nargs="*", choices=list(PROVIDER_NAMES))
     parser.add_argument("--date", type=date.fromisoformat, help="Forecast date YYYY-MM-DD")
     args = parser.parse_args()
     raise SystemExit(asyncio.run(check(args.providers, args.date)))

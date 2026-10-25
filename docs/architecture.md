@@ -17,7 +17,6 @@ HoroscopeService ◄──────── Scheduler
   Store     Provider protocol
  (SQLite)       │
                 ├── IsraelHayomProvider
-                ├── WallaProvider
                 └── MakoProvider
                          │
                          ▼

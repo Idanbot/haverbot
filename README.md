@@ -4,7 +4,7 @@ A friendly Telegram bot bringing Hebrew daily horoscopes to your groups.
 Pick your signs, provider, and posting time—or ask whenever you like.
 
 - 🇮🇱 Israel time, Hebrew dates, and Hebrew messages.
-- 📰 Israel Hayom, Walla, and mako adapters with automatic fallback.
+- 📰 Israel Hayom and mako adapters with automatic fallback.
 - ⚙️ Admin-only settings, shared cooldowns, and buttons for full forecasts.
 - 💾 Seven days of cached forecasts in SQLite.
 - 🐳 Python 3.15.1 + uv; Docker images for ARM64 and AMD64.

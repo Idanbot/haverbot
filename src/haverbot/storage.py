@@ -49,7 +49,9 @@ class Store:
                 chat_id INTEGER NOT NULL, day TEXT NOT NULL,
                 PRIMARY KEY(chat_id, day)
             );
-            PRAGMA user_version=1;
+            UPDATE groups SET settings=json_set(settings, '$.provider', 'mako')
+            WHERE json_extract(settings, '$.provider')='walla';
+            PRAGMA user_version=2;
         """)
 
     async def close(self) -> None:

@@ -1,4 +1,8 @@
-"""Aggregate Walla's dated per-sign daily API, with rendered-page fallback."""
+"""Unavailable provider, retained for future repairs and adapter tests.
+
+Walla has no current daily forecasts and must not be registered in the bot or
+diagnostic CLI. The implementation aggregates its dated per-sign daily API.
+"""
 
 import json
 import logging

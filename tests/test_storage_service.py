@@ -1,5 +1,6 @@
 import asyncio
-from dataclasses import replace
+import json
+from dataclasses import asdict, replace
 from datetime import timedelta
 
 from haverbot.domain import GroupSettings, Sign
@@ -42,6 +43,37 @@ async def test_settings_persist_and_group_data_isolated(tmp_path):
     await reopened.open()
     assert await reopened.settings(-123) == settings
     await reopened.close()
+
+
+async def test_unavailable_walla_preference_migrates_to_mako_on_restart(tmp_path):
+    path = str(tmp_path / "migration.db")
+    store = Store(path)
+    await store.open()
+    settings = GroupSettings(-1, signs=(Sign.LEO,), post_time="12:34", enabled=True)
+    legacy = {**asdict(settings), "provider": "walla"}
+    await store.db.execute("INSERT INTO groups VALUES (?, ?)", (-1, json.dumps(legacy)))
+    other = GroupSettings(-2, provider="israelhayom", fallback=False)
+    await store.save_settings(other)
+    await store.close()
+    await store.open()
+    assert await store.settings(-1) == settings
+    assert await store.settings(-2) == other
+    await store.close()
+
+
+async def test_unavailable_walla_cannot_refresh_or_serve_cached_expansions(store, forecasts, now):
+    provider = FakeProvider(forecasts)
+    provider.id = "walla"
+    await store.put_forecasts([replace(forecasts[0], provider="walla")])
+    service = HoroscopeService(store, [provider], lambda: now)
+    assert service.provider_order(GroupSettings(-1)) == ["mako", "israelhayom"]
+    service.request_refresh("walla", now.date())
+    assert not service._tasks
+    result = await service.request(GroupSettings(-1), exact=("walla", now.date(), Sign.ARIES))
+    assert result.error == UNAVAILABLE
+    assert not result.forecasts
+    assert not provider.calls
+    await service.close()
 
 
 async def test_cache_key_retention_and_immutable_same_day(store, forecasts, now):

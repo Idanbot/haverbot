@@ -59,7 +59,8 @@ SIGN_LABELS: dict[Sign, tuple[str, str]] = dict(
         strict=True,
     )
 )
-PROVIDER_NAMES = {"mako": "mako", "israelhayom": "ישראל היום", "walla": "וואלה"}
+PROVIDER_NAMES = {"mako": "mako", "israelhayom": "ישראל היום"}
+UNAVAILABLE_PROVIDERS = {"walla": "וואלה"}
 
 
 def israel_now() -> datetime:
@@ -106,6 +107,8 @@ class GroupSettings:
         validate_time(self.post_time)
         validate_minutes(self.bulletin_minutes)
         validate_minutes(self.single_minutes)
+        if self.provider in UNAVAILABLE_PROVIDERS:
+            raise ValueError("המקור אינו זמין כרגע. אפשר לבחור mako או israelhayom.")
         if self.provider not in PROVIDER_NAMES:
             raise ValueError("מקור לא מוכר.")
         if not self.signs or len(set(self.signs)) != len(self.signs):

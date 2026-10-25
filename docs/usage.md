@@ -64,7 +64,7 @@ Configuration commands, available to group administrators:
 | --- | --- |
 | `/settings enabled on` | Daily posting off until enabled |
 | `/settings time 08:00` | `08:00`; strict `HH:MM`, Israel local time |
-| `/settings provider israelhayom` | `israelhayom`, `walla`, or `mako` |
+| `/settings provider israelhayom` | `israelhayom` or `mako` |
 | `/settings fallback off` | On by default |
 | `/settings signs אריה,טלה` | All signs by default; at least one required |
 | `/settings signs all` | Select all 12 signs |
@@ -95,12 +95,11 @@ Telegram's native RTL rendering.
 | Provider | Public source |
 | --- | --- |
 | ישראל היום | https://www.israelhayom.co.il/horoscopes |
-| וואלה | https://horoscope.walla.co.il/ |
 | mako | https://mobile.mako.co.il/spirituality-newage/horoscope?partner=ChannelHeader |
 
 Mako is the default preference. With automatic fallback enabled, the bot tries
 the preferred provider first, followed by the remaining providers in this order:
-Israel Hayom, Walla. New groups include all 12 signs by default. One bulletin
+mako, Israel Hayom. New groups include all 12 signs by default. One bulletin
 always uses **one provider**.
 Each forecast must match the requested date. Missing content is never fabricated,
 mixed across providers, or relabeled with today's date.
@@ -110,9 +109,9 @@ storing group data, or printing source text:
 
 ```sh
 uv run haverbot-check-providers mako
-uv run haverbot-check-providers israelhayom walla mako
+uv run haverbot-check-providers israelhayom mako
 # Check a specific forecast date without caching it:
-uv run haverbot-check-providers --date 2026-06-01 walla
+uv run haverbot-check-providers --date 2026-10-25 mako
 # In the built image:
 docker compose run --rm --no-deps --entrypoint haverbot-check-providers haverbot mako
 ```

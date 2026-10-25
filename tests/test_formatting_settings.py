@@ -66,7 +66,7 @@ def test_mixed_provider_or_day_rejected(forecasts):
     "key,value,field,expected",
     [
         ("time", "23:59", "post_time", "23:59"),
-        ("provider", "walla", "provider", "walla"),
+        ("provider", "israelhayom", "provider", "israelhayom"),
         ("enabled", "on", "enabled", True),
         ("on_demand", "off", "on_demand", False),
         ("fallback", "toggle", "fallback", False),
@@ -90,6 +90,7 @@ def test_admin_setting_values(key, value, field, expected):
         ("single_cooldown", "1441"),
         ("cooldown", "bad"),
         ("provider", "unknown"),
+        ("provider", "walla"),
         ("words", "101"),
         ("signs", ""),
         ("enabled", "yes"),
