@@ -60,8 +60,4 @@ CI checks tests, types, lint, and both Docker architectures before publishing to
 GHCR on `main` and `v*.*.*` tags. It uses GitHub's built-in token; your Telegram
 secret stays on the Pi.
 
-**Source availability:** mako's 12 daily signs were verified. Israel Hayom blocked
-this machine's automated requests; Walla returned no dated daily text. Fallback
-handles unavailable sources.
-
 See the [full guide](docs/usage.md) and [architecture](docs/architecture.md) for details.

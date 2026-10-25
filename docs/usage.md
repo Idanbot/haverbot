@@ -90,19 +90,19 @@ The Hebrew date describes the **forecast day**, rather than the religious date a
 the instant of delivery after sunset. Text stays in Unicode logical order for
 Telegram's native RTL rendering.
 
-## Providers and current live verification
+## Horoscope providers
 
-| Provider | Public source | Verification on 25 October 2026 |
-| --- | --- | --- |
-| ישראל היום | https://www.israelhayom.co.il/horoscopes | This development machine received HTTP 403. Adapter discovery/body parsing is covered by synthetic structure fixtures; live extraction remains unverified here. |
-| וואלה | https://horoscope.walla.co.il/ | Public sign pages loaded, but returned no dated daily forecast section for all 12 signs. Profiles and annual forecasts are deliberately rejected. |
-| mako | https://mobile.mako.co.il/spirituality-newage/horoscope?partner=ChannelHeader | Bot HTTP client successfully parsed all 12 forecasts dated 25/10. Other public mako URLs sometimes returned a challenge. |
+| Provider | Public source |
+| --- | --- |
+| ישראל היום | https://www.israelhayom.co.il/horoscopes |
+| וואלה | https://horoscope.walla.co.il/ |
+| mako | https://mobile.mako.co.il/spirituality-newage/horoscope?partner=ChannelHeader |
 
-All three are registered. Israel Hayom is the default preference; automatic
-fallback can use mako when it has a complete set of the requested signs. Fallback
-order is preferred provider first, followed by remaining providers in this order:
-Israel Hayom, Walla, mako. One bulletin always uses **one provider**. Missing content
-is never fabricated, mixed across providers, or relabeled with today's date.
+Israel Hayom is the default preference. With automatic fallback enabled, the bot
+tries the preferred provider first, followed by the remaining providers in this
+order: Israel Hayom, Walla, mako. One bulletin always uses **one provider**.
+Each forecast must match the requested date. Missing content is never fabricated,
+mixed across providers, or relabeled with today's date.
 
 Run an explicit live diagnostic without loading `.env`, contacting Telegram,
 storing group data, or printing source text:
