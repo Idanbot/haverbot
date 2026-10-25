@@ -60,7 +60,10 @@ class IsraelHayomProvider:
                     headline = headline or str(obj.get("headline", ""))
                     candidate = obj.get("articleBody", "")
                     if isinstance(candidate, str):
-                        body = candidate
+                        # ArticleBody currently appends a promotional link after the forecast.
+                        body = re.split(
+                            r"לתחזיות אסטרולוגיות נוספות היכנסו", candidate, maxsplit=1
+                        )[0]
         if (
             "יומית" not in headline
             or sign.hebrew not in headline

@@ -19,9 +19,10 @@ class WallaProvider:
     @classmethod
     def parse(cls, html: str, day: date, sign: Sign, url: str) -> Forecast | None:
         document = soup(html)
-        section = document.select_one(".today-horoscope .daily-forecast")
-        if section is None:
+        daily_section = document.select_one(".today-horoscope")
+        if daily_section is None:
             return None
+        section = daily_section.select_one(".daily-forecast") or daily_section
         # A fetch date is not evidence of a forecast date.
         if numeric_date(section.get_text(" ", strip=True), day) != day:
             return None

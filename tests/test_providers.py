@@ -51,6 +51,15 @@ def test_walla_requires_dated_daily_content():
     )
 
 
+def test_walla_accepts_dated_text_in_updated_daily_section_markup():
+    html = (
+        '<section class="today-horoscope"><p>25.10.2026</p>'
+        "<p>היום צפויה לכם תחזית יומית ארוכה מספיק.</p></section>"
+    )
+    item = WallaProvider.parse(html, DAY, Sign.ARIES, "https://horoscope.walla.co.il/zodiac/1")
+    assert item and "תחזית יומית" in item.text
+
+
 def test_israelhayom_discovery_rejects_old_weekly_and_foreign_links():
     links = IsraelHayomProvider.discover(fixture("israelhayom-index.html"), DAY, set(Sign))
     assert links == {Sign.ARIES: "https://www.israelhayom.co.il/horoscopes/aries/article/123"}
@@ -69,6 +78,18 @@ def test_israelhayom_html_body_and_broken_json():
     html += '<script type="application/ld+json">bad</script>'
     html += '<div itemprop="articleBody"><p>תחזית יומית ארוכה מספיק לבדיקה.</p></div>'
     assert IsraelHayomProvider.parse(html, DAY, Sign.ARIES, "https://example.com")
+
+
+def test_israelhayom_removes_article_navigation_from_structured_forecast():
+    html = """
+    <h1>מזל טלה, תחזית הורוסקופ יומית 25.10.2026</h1>
+    <script type="application/ld+json">
+    {"@type":"NewsArticle","headline":"מזל טלה, תחזית הורוסקופ יומית 25.10.2026",
+    "articleBody":"תחזית יומית ארוכה מספיק עבור טלה. לתחזיות אסטרולוגיות נוספות היכנסו לאתר אחר"}
+    </script>
+    """
+    item = IsraelHayomProvider.parse(html, DAY, Sign.ARIES, "https://example.com")
+    assert item and item.text == "תחזית יומית ארוכה מספיק עבור טלה."
 
 
 @pytest.mark.parametrize(
