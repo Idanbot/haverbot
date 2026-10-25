@@ -59,7 +59,7 @@ SIGN_LABELS: dict[Sign, tuple[str, str]] = dict(
         strict=True,
     )
 )
-PROVIDER_NAMES = {"israelhayom": "ישראל היום", "walla": "וואלה", "mako": "mako"}
+PROVIDER_NAMES = {"mako": "mako", "israelhayom": "ישראל היום", "walla": "וואלה"}
 
 
 def israel_now() -> datetime:
@@ -94,7 +94,7 @@ class GroupSettings:
     chat_id: int
     enabled: bool = False
     post_time: str = "08:00"
-    provider: str = "israelhayom"
+    provider: str = "mako"
     fallback: bool = True
     signs: tuple[Sign, ...] = tuple(Sign)
     on_demand: bool = True

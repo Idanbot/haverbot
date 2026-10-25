@@ -41,7 +41,7 @@ def main() -> None:
     )
     fetcher = HttpFetcher(client)
     service = HoroscopeService(
-        store, [IsraelHayomProvider(fetcher), WallaProvider(fetcher), MakoProvider(fetcher)]
+        store, [MakoProvider(fetcher), IsraelHayomProvider(fetcher), WallaProvider(fetcher)]
     )
     worker: asyncio.Task[None] | None = None
 

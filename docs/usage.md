@@ -98,9 +98,10 @@ Telegram's native RTL rendering.
 | וואלה | https://horoscope.walla.co.il/ |
 | mako | https://mobile.mako.co.il/spirituality-newage/horoscope?partner=ChannelHeader |
 
-Israel Hayom is the default preference. With automatic fallback enabled, the bot
-tries the preferred provider first, followed by the remaining providers in this
-order: Israel Hayom, Walla, mako. One bulletin always uses **one provider**.
+Mako is the default preference. With automatic fallback enabled, the bot tries
+the preferred provider first, followed by the remaining providers in this order:
+Israel Hayom, Walla. New groups include all 12 signs by default. One bulletin
+always uses **one provider**.
 Each forecast must match the requested date. Missing content is never fabricated,
 mixed across providers, or relabeled with today's date.
 

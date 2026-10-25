@@ -10,6 +10,12 @@ from haverbot.formatting import bulletin, full_sign, header, units
 from haverbot.telegram_app import TelegramController
 
 
+def test_group_defaults_to_mako_and_all_signs():
+    settings = GroupSettings(-1)
+    assert settings.provider == "mako"
+    assert settings.signs == tuple(Sign)
+
+
 def test_hebrew_header_uses_forecast_date_and_escapes_content(forecasts):
     message = bulletin([replace(forecasts[0], text="<b>שלום & עולם</b>")], GroupSettings(-1))
     assert "25/10/2026" in message.text
