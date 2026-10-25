@@ -6,7 +6,7 @@ import asyncio
 import httpx
 
 from haverbot.domain import Sign, israel_now
-from haverbot.providers.base import HttpFetcher, ProviderError
+from haverbot.providers.base import BROWSER_HEADERS, HttpFetcher, ProviderError
 from haverbot.providers.israelhayom import IsraelHayomProvider
 from haverbot.providers.mako import MakoProvider
 from haverbot.providers.walla import WallaProvider
@@ -18,7 +18,7 @@ async def check(names: list[str]) -> int:
     async with httpx.AsyncClient(
         timeout=20,
         follow_redirects=True,
-        headers={"User-Agent": "Haverbot/0.1 (daily horoscope cache; Python HTTPX)"},
+        headers=BROWSER_HEADERS,
     ) as client:
         fetcher = HttpFetcher(client)
         providers = [IsraelHayomProvider(fetcher), WallaProvider(fetcher), MakoProvider(fetcher)]

@@ -15,6 +15,11 @@ from haverbot.domain import ISRAEL, Forecast, Sign
 
 logger = logging.getLogger(__name__)
 
+BROWSER_HEADERS = {
+    "User-Agent": "Mozilla/5.0 (X11; Linux x86_64; rv:150.0) Gecko/20100101 Firefox/150.0",
+    "Accept-Language": "he-IL,he;q=0.9,en-US;q=0.7,en;q=0.6",
+}
+
 
 class ProviderError(Exception):
     def __init__(self, message: str, retry_after: float = 0) -> None:

@@ -13,7 +13,7 @@ from telegram.ext import (
 )
 
 from haverbot.config import Config
-from haverbot.providers.base import HttpFetcher
+from haverbot.providers.base import BROWSER_HEADERS, HttpFetcher
 from haverbot.providers.israelhayom import IsraelHayomProvider
 from haverbot.providers.mako import MakoProvider
 from haverbot.providers.walla import WallaProvider
@@ -37,7 +37,7 @@ def main() -> None:
         timeout=httpx.Timeout(20, connect=10),
         follow_redirects=True,
         limits=httpx.Limits(max_connections=4),
-        headers={"User-Agent": "Haverbot/0.1 (daily horoscope cache; Python HTTPX)"},
+        headers=BROWSER_HEADERS,
     )
     fetcher = HttpFetcher(client)
     service = HoroscopeService(
