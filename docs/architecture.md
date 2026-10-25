@@ -29,7 +29,7 @@ HoroscopeService ◄──────── Scheduler
   Hebrew labels, and the Israel timezone.
 * `storage.py`: asynchronous persistence. Forecast keys are immutable; conditional
   SQLite UPSERTs atomically claim cooldowns even across connections. Delivery
-  primary keys prevent repeated daily attempts. `user_version=3` includes durable provider/day ingestion claims and migration
+  primary keys prevent repeated daily attempts. `user_version=4` includes durable provider/day ingestion claims and migration
   of the previous default word cap to automatic sizing.
 * `providers/`: public HTML/JSON extraction. Each provider returns only dated daily
   forecasts it can verify. HTTP timeouts, response bounds, pacing, and safe failures
@@ -48,6 +48,10 @@ HoroscopeService ◄──────── Scheduler
   Private chat users control their own configuration without a membership lookup.
 * `main.py`: dependency composition, lifecycle, commands, and polling. No service
   reads the token; it is confined to configuration and Telegram construction.
+* `compliments/`: gender-specific Hebrew templates, strict JSONL import, private
+  profile/onboarding persistence, random draws without replacement, and daily
+  delivery through the scheduler extension. The bundled catalog is a package
+  resource; startup imports missing IDs without overwriting manual edits.
 * `check_providers.py`: optional live source diagnostics; never loads bot credentials.
 
 ## Add a provider

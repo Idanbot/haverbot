@@ -1,4 +1,6 @@
 import asyncio
+import sqlite3
+from contextlib import closing
 from unittest.mock import AsyncMock
 
 import pytest
@@ -34,6 +36,8 @@ def test_composition_lifecycle_without_telegram_network(monkeypatch, tmp_path):
 
         async def lifecycle():
             await application.post_init(application)
+            with closing(sqlite3.connect(tmp_path / "state.db")) as connection:
+                assert connection.execute("SELECT count(*) FROM compliments").fetchone()[0] == 500
             await asyncio.sleep(0)
             await application.post_stop(application)
             await application.post_shutdown(application)
@@ -45,3 +49,4 @@ def test_composition_lifecycle_without_telegram_network(monkeypatch, tmp_path):
     main()
     assert called == [True]
     commands.assert_awaited_once()
+    assert {"start", "compliment", "compliments"} <= {c.command for c in commands.call_args.args[0]}

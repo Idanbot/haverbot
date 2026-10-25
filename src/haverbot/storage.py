@@ -9,6 +9,7 @@ from typing import Literal
 
 import aiosqlite
 
+from haverbot.compliments.repository import SCHEMA as COMPLIMENT_SCHEMA
 from haverbot.domain import Forecast, GroupSettings, Sign
 
 Bucket = Literal["bulletin", "single"]
@@ -31,6 +32,7 @@ class Store:
             Path(self.path).parent.mkdir(parents=True, exist_ok=True)
         self._db = await aiosqlite.connect(self.path, isolation_level=None)
         await self.db.execute("PRAGMA journal_mode=WAL")
+        await self.db.execute("PRAGMA foreign_keys=ON")
         await self.db.execute("PRAGMA busy_timeout=5000")
         await self.db.executescript("""
             CREATE TABLE IF NOT EXISTS groups (
@@ -58,8 +60,9 @@ class Store:
             UPDATE groups SET settings=json_set(settings, '$.max_words', 0)
             WHERE json_extract(settings, '$.max_words')=40
                 AND (SELECT user_version FROM pragma_user_version)<3;
-            PRAGMA user_version=3;
+            PRAGMA user_version=4;
         """)
+        await self.db.executescript(COMPLIMENT_SCHEMA)
 
     async def close(self) -> None:
         if self._db is not None:
@@ -162,6 +165,7 @@ class Store:
         )
         await self.db.execute("DELETE FROM deliveries WHERE day<?", (cutoff,))
         await self.db.execute("DELETE FROM ingestions WHERE day<?", (cutoff,))
+        await self.db.execute("DELETE FROM compliment_deliveries WHERE day<?", (cutoff,))
         # Cooldowns cannot remain active for longer than 24h.
         from haverbot.domain import ISRAEL
 
@@ -171,5 +175,11 @@ class Store:
         )
 
     async def forget_group(self, chat_id: int) -> None:
-        for table in ("groups", "cooldowns", "deliveries"):
+        for table in (
+            "groups",
+            "cooldowns",
+            "deliveries",
+            "compliment_profiles",
+            "compliment_setup",
+        ):
             await self.db.execute(f"DELETE FROM {table} WHERE chat_id=?", (chat_id,))

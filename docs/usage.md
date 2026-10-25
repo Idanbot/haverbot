@@ -55,6 +55,8 @@ controls their own settings and can enable their own daily subscription.
 | `/horoscope` | Bulletin for this chat's selected signs |
 | `/horoscope אריה` or `/horoscope leo` | Full forecast for one sign |
 | `/sign אריה` | Alias for a single-sign request |
+| `/compliment` | Private personalized Hebrew compliment; first use asks name/gender |
+| `/compliments` | Private compliment settings and daily subscription |
 | `/settings` | Personal settings in DMs; administrator settings in groups |
 | `/unsubscribe` | Disable scheduled posts; group admins only in groups |
 | `/forget` | Delete this chat's settings and cooldowns; group admins only in groups |
@@ -92,6 +94,9 @@ several messages if necessary. HTML is escaped; link previews are disabled.
 The Hebrew date describes the **forecast day**, rather than the religious date at
 the instant of delivery after sunset. Text stays in Unicode logical order for
 Telegram's native RTL rendering.
+
+Compliment profile and schedule settings are described in the [compliments guide](compliments.md).
+Daily compliments are independent of daily horoscopes and begin disabled.
 
 ## Horoscope providers
 
@@ -196,8 +201,8 @@ Docker build contexts. The Dockerfile copies only dependency manifests and sourc
 code. CI never needs the real token.
 
 SQLite stores group or private chat IDs because subscriptions require a destination. They
-stay in the runtime volume; usernames, member profiles, birthdays, and message
-history are not stored. `/forget` deletes chat settings, cooldowns, and delivery
+stay in the runtime volume; Telegram usernames, member profiles, birthdays, and message history are not stored.
+Compliment users supply their own Hebrew name and gender; these stay only in SQLite. `/forget` deletes chat settings, compliment names/profiles/history, cooldowns, and delivery
 claims; removal of the bot from a group also clears those records. The forecast
 cache is shared public content, so forgetting a group does not delete it.
 Application logs contain provider/error types and aggregate counts, rather than

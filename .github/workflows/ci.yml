@@ -59,7 +59,7 @@ jobs:
           cache-to: type=gha,mode=max,scope=${{ matrix.platform }}
       - name: Container imports, non-root user, and persistent SQLite volume
         run: |
-          docker run --rm --entrypoint python haverbot:test -c 'import os, haverbot.main; assert os.getuid() == 10001'
+          docker run --rm --entrypoint python haverbot:test -c 'import os, haverbot.main; from haverbot.compliments.catalog import bundled_catalog; assert os.getuid() == 10001; assert len(bundled_catalog()) == 500'
           docker volume create haverbot-ci-data
           docker run --rm -v haverbot-ci-data:/data --entrypoint python haverbot:test -c 'import asyncio; from haverbot.storage import Store; from haverbot.domain import GroupSettings; exec("async def check():\n s=Store(\"/data/check.db\"); await s.open(); await s.save_settings(GroupSettings(-1)); await s.close()"); asyncio.run(check())'
           docker run --rm -v haverbot-ci-data:/data --entrypoint python haverbot:test -c 'import asyncio; from haverbot.storage import Store; exec("async def check():\n s=Store(\"/data/check.db\"); await s.open(); assert len(await s.groups())==1; await s.close()"); asyncio.run(check())'

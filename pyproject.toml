@@ -23,6 +23,7 @@ dev = ["pytest>=8.4", "pytest-asyncio>=1.1", "pytest-cov>=7", "ruff>=0.14", "ty>
 [project.scripts]
 haverbot = "haverbot.main:main"
 haverbot-check-providers = "haverbot.check_providers:main"
+haverbot-import-compliments = "haverbot.compliments.import_catalog:main"
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

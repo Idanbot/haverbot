@@ -22,15 +22,18 @@ HELP = """שלום! אני חברבוט 🔮 — הורוסקופ בעברית, 
 /start או /help — עזרה
 /horoscope — תחזית למזלות שבחרתם
 /horoscope leo או /sign אריה — תחזית מלאה למזל אחד
+/compliment — מחמאה אישית אקראית בעברית, בפרטי בלבד
+/compliments או /settings compliments — שם, לשון פנייה ומחמאות יומיות
 /settings — בחירת מקור, מזלות, שעה, אורך וזמני המתנה
 /unsubscribe — ביטול הפרסום היומי
-/forget — מחיקת ההגדרות וזמני ההמתנה בצ׳אט
+/forget — מחיקת השם, ההגדרות וזמני ההמתנה בצ׳אט
 
 בפרטי אתם שולטים בהגדרות שלכם; בקבוצות רק מנהלים משנים הגדרות.
 הוסיפו את הבוט כמנהל בקבוצה כדי לאפשר בדיקת הרשאות.
 הפרסום היומי מתחיל כבוי. השעות לפי שעון ישראל.
 המקורות נאספים פעם ביום. כל הבקשות והכפתורים נטענים מהמטמון.
 אורך התחזית מותאם לתקציב התווים; כפתורים מציגים טקסט מלא כשצריך.
+בהפעלה הראשונה בפרטי נבקש שם ולשון פנייה למחמאות. כרגע הנוסח הוא לנקבה בלבד.
 """
 SETTINGS_HELP = """שינוי ערכים באמצעות פקודות:
 /settings time 08:00
@@ -218,6 +221,8 @@ class TelegramController:
         ]
         rows.extend(signs[i : i + 3] for i in range(0, len(signs), 3))
         rows.append([InlineKeyboardButton("כל המזלות", callback_data="cfg:signs:all")])
+        if settings.chat_id > 0:
+            rows.append([InlineKeyboardButton("💝 הגדרות מחמאות", callback_data="cmp:settings")])
         return text, InlineKeyboardMarkup(rows)
 
     @staticmethod
